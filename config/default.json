@@ -1,0 +1,13 @@
+{
+    "mongoURI": "mongodb+srv://mahboobullahmuntazer2005:c1ByHzhvvrLsYSpZ@cluster0.qvaiggy.mongodb.net/Mashraqiwal?retryWrites=true&w=majority",
+
+   "jwtSecret":"mysecrettoken"
+
+
+ 
+}
+
+
+  
+
+  
