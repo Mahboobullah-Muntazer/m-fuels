@@ -17,6 +17,10 @@ app.use(express.static(path.join(__dirname, 'front')));
 
 app.use('/api/actions', require('./routes/api/actions'));
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'front', 'index.html'));
+});
+
 const PORT = process.env.PORT || 8000;
 
 const server = app.listen(PORT, () =>
