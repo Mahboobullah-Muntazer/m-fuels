@@ -3,17 +3,17 @@ const router = express.Router();
 const auth = require('../../middleware/auth');
 const User = require('../../lib/models');
 const OTP = require('../../lib/otpModel');
-const Employee = require('../../lib/employee');
+
 const Supplier = require('../../lib/supplier'); // Import the OTP model
 const Customer = require('../../lib/customer');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
-const { Purchase, PurchaseCollection } = require('../../lib/purchase');
-const { Sale, SaleCollection } = require('../../lib/sale');
-const { Expense, ExpenseCollection } = require('../../lib/expense');
-const { Salary, SalaryCollection } = require('../../lib/salary');
-const CustomerPayment = require('../../lib/customerPayment');
+const Purchase = require('../../lib/purchase');
+const Sale = require('../../lib/sale');
+const Expense = require('../../lib/expense');
+
+const  CashAccount = require('../../lib/cashAccount');
 const LastBillNumber = require('../../lib/lastBillNumber');
 const CollectionsDateManagement = require('../../lib/collectionsDateManagement');
 
@@ -29,6 +29,10 @@ require('dotenv').config();
 
 const { exec } = require('child_process');
 const fs = require('fs');
+const Sarafi = require('../../lib/sarafi');
+
+
+const Transaction = require('../../lib/transaction');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -568,89 +572,10 @@ router.delete('/deleteSupplier/:id', async (req, res) => {
   }
 });
 
-router.post('/addEmployee', auth, async (req, res) => {
-  try {
-    const { name, NIC, contactNumber, position, joinDate, salary, address } =
-      req.body;
 
-    // Convert salary to a number (integer)
-    const salaryAsInt = parseInt(salary, 10);
 
-    // Create a new Employee instance
-    const newEmployee = new Employee({
-      name,
-      NIC,
-      contactNumber,
-      position,
-      joinDate,
-      salary: salaryAsInt,
-      address,
-    });
 
-    // Save the new employee to the database
-    await newEmployee.save();
 
-    // Send a success response
-    res.json({ status: 'SUCCESS', message: 'Employee added successfully!' });
-  } catch (error) {
-    // Handle errors
-    console.error(error);
-    res.status(500).json({ status: 'ERROR', message: 'Internal server error' });
-  }
-});
-
-router.get('/getAllEmployees', auth, async (req, res) => {
-  try {
-    let employees = await Employee.find();
-    if (employees.length === 0) {
-      return res.json({
-        status: 'FAILED',
-        message: 'There are no employee!',
-      });
-    } else {
-      return res.json(employees);
-    }
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({
-      status: 'FAILED',
-      message: 'Server Error!',
-    });
-  }
-});
-
-router.put('/updateEmployee', auth, async (req, res) => {
-  const userData = req.body;
-
-  // Clean data by removing null or empty values
-  const cleanedData = {};
-  for (const [key, value] of Object.entries(userData)) {
-    if (value !== null && value !== undefined && value !== '') {
-      cleanedData[key] = value;
-    }
-  }
-
-  try {
-    // If the password is provided in cleanedData, check its length
-
-    const updateEmployee = await Employee.findOneAndUpdate(
-      { _id: cleanedData._id },
-      { $set: cleanedData },
-      { new: true, useFindAndModify: false }
-    );
-
-    if (updateEmployee) {
-      res.json({ status: 'success', employee: updateEmployee });
-    } else {
-      res.status(404).json({ status: 'FAILED', message: 'User not found' });
-    }
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res
-      .status(500)
-      .json({ status: 'FAILED', message: 'Internal Server Error' });
-  }
-});
 
 router.post('/addCustomer', auth, async (req, res) => {
   try {
@@ -721,44 +646,18 @@ router.put('/updateCustomer', auth, async (req, res) => {
   }
 });
 
-router.post('/addPurchase', auth, async (req, res) => {
+
+router.post('/addSarafi', auth, async (req, res) => {
   try {
-    console.log('purchase', req.body);
-    // Convert quantityInTons, quantityInLiters, and totalPrice to Numbers
-    req.body.quantityInTons = parseFloat(req.body.quantityInTons);
-    req.body.quantityInLiters = parseFloat(req.body.quantityInLiters);
-    req.body.totalPrice = parseFloat(req.body.totalPrice);
+    // Create a new supplier instance using the Supplier model
+    const newSarafi = new Sarafi(req.body);
 
-    const selectedCollection = req.body.selectedCollection; // Extract month and year from the purchase date
+    // Save the new supplier to the database
+    await newSarafi.save();
 
-    // Check if PurchaseCollection for the given month exists, create one if not
-    let purchaseCollection = await PurchaseCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!purchaseCollection) {
-      // If PurchaseCollection doesn't exist, create a new one with a default status of 'open'
-      purchaseCollection = new PurchaseCollection({
-        monthYear: selectedCollection,
-        status: 'open',
-        purchases: [],
-      });
-    }
-
-    // Create a new Purchase instance using the Purchase model
-    const newPurchase = new Purchase(req.body);
-
-    // Add the new purchase to the purchases array in the PurchaseCollection
-    purchaseCollection.purchases.push(newPurchase);
-
-    // Save the updated PurchaseCollection to the database
-    await purchaseCollection.save();
-
-    res.status(201).json({ status: 'SUCCESS', message: 'معلومات ثبت شو' });
-
-    // Update stock based on the fuel type (you may need to implement this part)
+    res.status(201).json({ status: 'SUCCESS', message: 'صرافی ثبت شو' });
   } catch (error) {
-    console.error(error);
+    console.error('Error adding sarafi:', error);
     res.status(500).json({
       status: 'FAILED',
       message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی',
@@ -766,80 +665,31 @@ router.post('/addPurchase', auth, async (req, res) => {
   }
 });
 
-router.get('/getAllPurchases', auth, async (req, res) => {
-  try {
-    const { monthYear } = req.query;
 
-    // Check if PurchaseCollection for the given month exists
-    const purchaseCollection = await PurchaseCollection.findOne({ monthYear });
-
-    if (!purchaseCollection) {
-      return res.json({
-        status: 'FAILED',
-        message: 'خرید شتون نه لری',
-        data: [],
-      });
-    }
-
-    // Retrieve all purchases for the specified PurchaseCollection
-    const purchases = purchaseCollection.purchases;
-
-    if (purchases.length === 0) {
-      return res.json({
-        status: 'FAILED',
-        message: 'خرید شتون نه لری',
-        data: [],
-      });
-    }
-
-    return res.json(purchases);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({
-      status: 'FAILED',
-      message: 'سرور مشکل',
-    });
-  }
-});
-
-router.put('/updatePurchase', auth, async (req, res) => {
-  const purchaseData = req.body;
+router.put('/updateSarafi', auth, async (req, res) => {
+  const userData = req.body;
 
   // Clean data by removing null or empty values
   const cleanedData = {};
-  for (const [key, value] of Object.entries(purchaseData)) {
+  for (const [key, value] of Object.entries(userData)) {
     if (value !== null && value !== undefined && value !== '') {
       cleanedData[key] = value;
     }
   }
 
   try {
-    // Construct the update query dynamically based on the cleanedData
+    // If the password is provided in cleanedData, check its length
 
-    // Create an empty object to store the dynamically constructed update data
-    const updateData = {};
-
-    // Iterate over the keys in cleanedData
-    for (const key of Object.keys(cleanedData)) {
-      // Construct the path for each field in the purchases array
-      // For example, if key is 'driverName', the path will be 'purchases.$.driverName'
-      updateData[`purchases.$.${key}`] = cleanedData[key];
-    }
-
-    // Use findOneAndUpdate to find the specific purchase and update only the specified fields
-    const updatePurchase = await PurchaseCollection.findOneAndUpdate(
-      {
-        monthYear: purchaseData.selectedCollection,
-        'purchases._id': purchaseData._id,
-      },
-      { $set: updateData },
+    const updateSarafi = await Sarafi.findOneAndUpdate(
+      { _id: cleanedData._id },
+      { $set: cleanedData },
       { new: true, useFindAndModify: false }
     );
 
-    if (updatePurchase) {
-      res.json({ status: 'success', supplier: updatePurchase });
+    if (updateSarafi) {
+      res.json({ status: 'success', });
     } else {
-      res.status(404).json({ status: 'FAILED', message: 'پیرودونکی پیدا نشو' });
+      res.status(404).json({ status: 'FAILED', message: 'صرافی پیدا نشو' });
     }
   } catch (error) {
     console.error('Error updating user:', error);
@@ -849,425 +699,545 @@ router.put('/updatePurchase', auth, async (req, res) => {
   }
 });
 
-// Backend route
-router.delete('/deletePurchase/:selectedCollection/:id', async (req, res) => {
-  const { selectedCollection, id } = req.params;
 
+
+
+
+
+
+router.get('/getAllSarafis', auth, async (req, res) => {
   try {
-    // Find the PurchaseCollection with the given monthYear
-    const purchaseCollection = await PurchaseCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!purchaseCollection) {
+    let sarafis = await Sarafi.find();
+    if (sarafis.length === 0) {
       return res.json({
-        status: 'FIELD',
-        message: 'PurchaseCollection not found',
+        status: 'FAILED',
+        message: ' صرافی شتون نه لری',
       });
+    } else {
+      return res.json(sarafis);
     }
-
-    // Find the index of the purchase with the specified id in the purchases array
-    const purchaseIndex = purchaseCollection.purchases.findIndex(
-      (purchase) => purchase._id.toString() === id
-    );
-
-    if (purchaseIndex === -1) {
-      return res.json({ status: 'FIELD', message: 'Purchase not found' });
-    }
-
-    // Remove the purchase from the purchases array
-    purchaseCollection.purchases.splice(purchaseIndex, 1);
-
-    // Save the updated PurchaseCollection to the database
-    await purchaseCollection.save();
-
-    res.json({ status: 'success', message: 'Record deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting purchase:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-});
-
-router.post('/addExpense', auth, async (req, res) => {
-  try {
-    // Convert quantityInTons, quantityInLiters, and totalPrice to Numbers
-    req.body.amount = parseFloat(req.body.amount);
-
-    const selectedCollection = req.body.selectedCollection; // Extract month and year from the purchase date
-
-    // Check if PurchaseCollection for the given month exists, create one if not
-    let expenseCollection = await ExpenseCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!expenseCollection) {
-      // If PurchaseCollection doesn't exist, create a new one with a default status of 'open'
-      expenseCollection = new ExpenseCollection({
-        monthYear: selectedCollection,
-        status: 'open',
-        expenses: [],
-      });
-    }
-
-    // Create a new Purchase instance using the Purchase model
-    const newExpense = new Expense(req.body);
-
-    // Add the new purchase to the purchases array in the PurchaseCollection
-    expenseCollection.expenses.push(newExpense);
-
-    // Save the updated PurchaseCollection to the database
-    await expenseCollection.save();
-
-    res.status(201).json({ status: 'SUCCESS', message: 'معلومات ثبت شو' });
-
-    // Update stock based on the fuel type (you may need to implement this part)
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err.message);
     res.status(500).json({
       status: 'FAILED',
-      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی',
+      message: 'سرور مشکل',
     });
   }
 });
 
-async function generateBillNumber() {
-  try {
-    // Find the document and update it by incrementing the billNumber
-    const previousBillNumberDocument = await LastBillNumber.findOne();
 
-    // If the document doesn't exist, create it with the default value
-    if (!previousBillNumberDocument) {
-      const newDocument = new LastBillNumber();
-      await newDocument.save();
-      console.log('Generated Bill Number:', newDocument.billNumber);
-      return newDocument.billNumber;
-    }
 
-    const updatedBillNumberDocument = await LastBillNumber.findOneAndUpdate(
-      {},
-      { $inc: { billNumber: 1 } },
-      { new: true }
-    );
-
-    const previousBillNumber = previousBillNumberDocument.billNumber;
-    const newBillNumber = updatedBillNumberDocument.billNumber;
-
-    console.log('Previous Bill Number:', previousBillNumber);
-    console.log('New Bill Number:', newBillNumber);
-
-    // Check if the newBillNumber is greater than the previousBillNumber by 1
-    if (newBillNumber !== previousBillNumber + 1) {
-      throw new Error(
-        'Error: New Bill Number is not greater than the previous Bill Number by 1.'
-      );
-    }
-
-    return newBillNumber;
-  } catch (error) {
-    console.error('Error generating bill number:', error);
-    throw error;
-  }
-}
-router.post('/addSale', auth, async (req, res) => {
-  console.log('addSale', req.body.pricePerTon);
+router.post('/addPurchase', auth, async (req, res) => {
+  // Start a transaction session
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    let payment;
-    // Convert quantityInTons, quantityInLiters, and totalPrice to Numbers
-    req.body.quantityInTons = parseFloat(req.body.quantityInTons);
-    req.body.quantityInLiters = parseFloat(req.body.quantityInLiters);
-    req.body.totalPrice = parseFloat(req.body.totalPrice);
-    req.body.pricePerTon = parseFloat(req.body.pricePerTon);
-    req.body.totalPaid = parseFloat(req.body.totalPaid);
-    req.body.remaining = parseFloat(req.body.remaining);
-    // Set the customer field by using the customerId in the request
-    req.body.customer = req.body.customerId;
+    // Convert relevant fields to appropriate types
+  
+    // Set the customer and monthYear fields
+  
+    const existingAccount = await CashAccount.findOne({ name: 'Main' });
+    if (!existingAccount) {
+      const cashAccount = new CashAccount({ name: 'Main', balance: 0 });
+      await cashAccount.save({ session });
+      
+    }
+   
 
-    // Create a new purchase instance using the Sale model
-    const newSale = new Sale(req.body);
 
-    // Set the billNumber before saving the new sale
-    newSale.billNumber = await generateBillNumber();
-
-    // Find the SaleCollection document with the given monthYear
-    const saleCollection = await SaleCollection.findOne({
-      monthYear: req.body.selectedCollection,
+    const newPurchase = new Purchase({
+      supplier: req.body.supplier,
+      fuelType: req.body.fuelType,
+      driverName: req.body.driverName,
+      plateNumber: req.body.plateNumber,
+      quantityInTons: req.body.quantityInTons,
+      quantityInLiters: req.body.quantityInLiters,
+      purchaseDate: req.body.purchaseDate,
+      totalPrice: req.body.totalPrice,
+      transferedFromAddress: req.body.transferedFromAddress,
+      monthYear: req.body.collection, // Use the collection ID from the request body
     });
 
-    if (saleCollection) {
-      // SaleCollection exists, push the newSale to its sales array
-      saleCollection.sales.push(newSale);
-      await saleCollection.save({ session });
-    } else {
-      // SaleCollection does not exist, create a new one
-      const newSaleCollection = new SaleCollection({
-        monthYear: req.body.selectedCollection,
-        sales: [newSale],
-      });
-      await newSaleCollection.save({ session });
-    }
+       
 
-    // Check if a customerPayment record with the given customerId already exists
-    const existingCustomerPayment = await CustomerPayment.findOne({
-      customer: req.body.customerId,
-    });
+        const savedPurchase= await newPurchase.save({ session });
+     
 
-    if (existingCustomerPayment) {
-      // Update existing record by adding the sale information
-      existingCustomerPayment.sales.push({ sale: newSale._id });
+        await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: -parseFloat(req.body.totalPrice) } },
+          { new: true, session }
+        );
 
-      // Update payment information
-      existingCustomerPayment.payments.push({
-        amount: req.body.remaining,
-        paymentDate: req.body.saleDate,
-        type: 'debit', // You can adjust this based on your logic
-        reason: 'sale of fuel',
-        billNumber: newSale.billNumber,
-      });
+ 
+ 
+        const newTransactionData = {
+        
+          monthYear:req.body.collection,
+          totalAmount:parseFloat(req.body.totalPrice),
+          paidAmount:parseFloat(req.body.totalPrice),
+          remainingAmount:parseFloat(0),
+          date: req.body.purchaseDate,
+           paymentType:'cash',
+           transactionType:'purchase',
+           purchase:savedPurchase._id
+        };
+     
+    
+       
+       
+    
+          const newTransaction = new Transaction(newTransactionData);
+    
+          const savedTransaction =  await newTransaction.save({ session });
+       
+            
 
-      // Save the updated customerPayment record
-      payment = await existingCustomerPayment.save({ session });
-    } else {
-      // Create a new customerPayment record
-      const customerPayment = new CustomerPayment({
-        customer: newSale.customer,
-        sales: [{ sale: newSale._id }],
-        payments: [
-          {
-            amount: req.body.remaining,
-            paymentDate: newSale.saleDate,
-            type: 'debit', // You can adjust this based on your logic
-            reason: 'Sale of fuel',
-            billNumber: newSale.billNumber,
-          },
-        ],
-      });
+            
 
-      // Save the customerPayment record to the database
-      payment = await customerPayment.save({ session });
-    }
-
-    // Commit the transaction
     await session.commitTransaction();
     session.endSession();
 
+    // Respond with success message and data
     res.status(201).json({
       status: 'SUCCESS',
       message: 'معلومات ثبت شو',
-      savedSale: newSale,
-      payment,
+    
     });
+    // Commit the transaction
+    
   } catch (error) {
     // Rollback the transaction in case of an error
     await session.abortTransaction();
     session.endSession();
 
-    console.error(error);
+    console.error('Error adding Purchase:', error);
     res.status(500).json({
       status: 'FAILED',
-      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی',
+      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی'
     });
   }
 });
 
-router.get('/getAllSales', auth, async (req, res) => {
+
+router.get('/getAllPurchases', auth, async (req, res) => {
   try {
     const { monthYear } = req.query;
 
-    // Check if SaleCollection for the given month exists
-    const saleCollection = await SaleCollection.findOne({ monthYear });
+console.log(monthYear)
 
-    if (!saleCollection) {
+    // Check if PurchaseCollection for the given month exists
+    const purchasesTransactions = await Transaction.find({ monthYear: monthYear._id,transactionType:"purchase"  })
+   
+    .populate('purchase')
+   
+    .exec(); 
+
+ 
+    if (!purchasesTransactions) {
       return res.json({
         status: 'FAILED',
-        message: 'خرڅلاو موجود ندی',
+        message: 'خرید شتون نه لری',
         data: [],
       });
     }
 
-    // Retrieve all sales for the specified SaleCollection and populate the customer field
-    const sales = await Sale.populate(saleCollection.sales, {
-      path: 'customer',
+
+
+    return res.json({
+      status: 'SUCCESS',
+      data: purchasesTransactions,
     });
 
-    if (sales.length === 0) {
-      return res.json({
-        status: 'FAILED',
-        message: 'خرڅلاو موجود ندی',
-        data: [],
-      });
-    }
-
-    return res.json(sales);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({
       status: 'FAILED',
-      message: 'سرور کی مشکل دی  ',
+      message: 'سرور مشکل',
     });
   }
 });
 
-// router.get('/getAllSales', auth, async (req, res) => {
-//   try {
-//     // Use .populate() to include customer information (customer name)
-//     let sales = await Sale.find().populate('customer', 'customerName');
 
-//     if (sales.length === 0) {
-//       return res.json({
-//         status: 'FAILED',
-//         message: ' خرید شتون نه لری',
-//       });
-//     } else {
-//       return res.json(sales);
-//     }
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).json({
-//       status: 'FAILED',
-//       message: 'سرور مشکل',
-//     });
-//   }
-// });
 
-router.put('/updateSale', auth, async (req, res) => {
-  const salesData = req.body;
+router.put('/updatePurchase', auth, async (req, res) => {
+  const purchaseData = req.body;
 
-  // Clean data by removing null or empty values
-  const cleanedData = {};
-  for (const [key, value] of Object.entries(salesData)) {
-    if (value !== null && value !== undefined && value !== '') {
-      cleanedData[key] = value;
-    }
-  }
+ 
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    const { selectedCollection } = salesData; // Assuming you pass monthYear in the request body
 
-    // Find SaleCollection by monthYear
-    const saleCollection = await SaleCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!saleCollection) {
-      return res
-        .status(404)
-        .json({ success: false, error: 'Sale Collection not found' });
+    const newPurchaseData = {
+      supplier:purchaseData.supplier,
+      fuelType:purchaseData.fuelType,
+      driverName:purchaseData.driverName,
+      plateNumber:purchaseData.plateNumber,
+      quantityInTons:purchaseData.quantityInTons,
+      quantityInLiters:purchaseData.quantityInLiters,
+      totalPrice:purchaseData.totalPrice,
+      transferedFromAddress:purchaseData.transferedFromAddress,
+      purchaseDate:purchaseData.purchaseDate,
+  
+    };
+    const cleanedData = {};
+    for (const [key, value] of Object.entries(newPurchaseData)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedData[key] = value;
+      }
     }
-
-    // Find the sale within the sales array
-    const saleIndex = saleCollection.sales.findIndex(
-      (sale) => sale._id.toString() === salesData._id
+ 
+   
+    const updatePurchase = await Purchase.findOneAndUpdate(
+      {
+  
+        _id: purchaseData._id,
+      },
+      { $set: cleanedData },
+      { new: true, useFindAndModify: false,session }
     );
+  
+    if(!updatePurchase)
+      {
+        await session.abortTransaction();
+    session.endSession();
 
-    if (saleIndex === -1) {
-      return res.status(404).json({ success: false, error: 'Sale not found' });
-    }
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
 
-    // Fetch the existing sale document
-    const existingSale = saleCollection.sales[saleIndex];
 
-    // Update the sale record with the new data
-    const updatedSale = { ...existingSale._doc, ...cleanedData }; // Merge existing and new data
-    saleCollection.sales[saleIndex] = updatedSale;
+      const newTransactionData = {
+        
+        
+        totalAmount:purchaseData.totalPrice,
+        paidAmount:purchaseData.totalPrice,
+        remainingAmount:parseFloat(0),
+        date: req.body.purchaseDate,
+         paymentType:'cash',
+         transactionType:'purchase',
+         
+      };
 
-    // Save the updated SaleCollection
-    await saleCollection.save();
-
-    // Find the associated CustomerPayment document
-    const customerPayment = await CustomerPayment.findOne({
-      customer: existingSale.customer,
-    });
-
-    // If customerPayment exists
-    if (customerPayment) {
-      // Check for the sale in the sales array
-      const salePaymentIndex = customerPayment.sales.findIndex(
-        (sale) => sale.sale.toString() === salesData._id
-      );
-
-      // If sale is found in the sales array
-      if (salePaymentIndex !== -1) {
-        // Update payment amount in CustomerPayment using remaining
-        customerPayment.payments.forEach((payment) => {
-          if (payment.billNumber === existingSale.billNumber) {
-            // Use remaining as the updated payment amount
-            payment.amount = salesData.remaining;
-          }
-        });
-
-        // Save the updated CustomerPayment
-        await customerPayment.save();
+      const cleanedTransactionData = {};
+    for (const [key, value] of Object.entries(newTransactionData)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedTransactionData[key] = value;
       }
     }
 
-    res.status(200).json({ success: true, data: updatedSale });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: 'Internal Server Error' });
+    const updatePurchaseTransaction = await Transaction.findOneAndUpdate(
+      {
+  
+        _id: purchaseData.purchaseData._id,
+      },
+      { $set: cleanedTransactionData },
+      { new: true, useFindAndModify: false,session }
+    );
+  
+    if(!updatePurchaseTransaction)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
+
+    if(purchaseData.totalPrice !=='' && purchaseData.totalPrice !==null && purchaseData.totalPrice !==undefined)
+   
+      {
+         const oldPrice=parseFloat(purchaseData.purchaseData.purchase.totalPrice)
+         const newPrice=parseFloat(purchaseData.totalPrice)
+        
+         if(oldPrice!==newPrice)
+          {
+
+            const differance=oldPrice-newPrice;
+
+          
+            const updateCash=  await CashAccount.findOneAndUpdate(
+              {name: 'Main'},
+              { $inc: { balance: parseFloat(differance) } },
+              { new: true, session }
+            );
+            
+            if(!updateCash)
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+          }
+
+
+      }
+
+    
+
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد تغیر شو' });
+       
+        } catch (error) {
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error updating Purchase:', error);
+    res.status(500).json({ status: 'FAILED', message: 'سرور مشکل' });
   }
 });
 
-router.delete('/deleteSale/:selectedCollection/:id', auth, async (req, res) => {
-  const { selectedCollection, id } = req.params;
 
+
+
+router.post('/deletePurchase', auth, async (req, res) => {
+  
+  
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     // Find SaleCollection by monthYear
-    const saleCollection = await SaleCollection.findOne({
-      monthYear: selectedCollection,
-    }).session(session);
+    const deletePurchase= await Purchase.findByIdAndDelete(req.body.purchase._id).session(session);
 
-    console.log('saleCo', saleCollection);
-    if (!saleCollection) {
-      await session.abortTransaction();
+    if(!deletePurchase)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+      }
+
+      const deletePurchaseTransaction= await Transaction.findByIdAndDelete(req.body._id).session(session);
+
+      if(!deletePurchaseTransaction)
+        {
+          await session.abortTransaction();
       session.endSession();
-      return res.json({
-        status: 'FAILED',
-        message: '  collection not available',
-      });
-    }
+  
+      return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+        }
+ 
+      const updateCash=  await CashAccount.findOneAndUpdate(
+        {name: 'Main'},
+        { $inc: { balance: parseFloat(req.body.purchase.totalPrice) } },
+        { new: true, session }
+      );
 
-    // Find and remove Sale from the sales array
-    const saleIndex = saleCollection.sales.findIndex((sale) =>
-      sale._id.equals(id)
-    );
-
-    if (saleIndex === -1) {
-      await session.abortTransaction();
+      if(!updateCash)
+        {
+          await session.abortTransaction();
       session.endSession();
-      return res.json({ status: 'FAILED', message: 'خرڅلاو موجود ندی' });
-    }
+  
+      return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+        }
 
-    const removedSale = saleCollection.sales.splice(saleIndex, 1)[0];
+  
 
-    // Save the updated SaleCollection
-    await saleCollection.save();
 
-    // Delete Sale Reference in CustomerPayment
-    await CustomerPayment.updateMany(
-      { 'sales.sale': id },
-      { $pull: { sales: { sale: id } } }
-    ).session(session);
-
-    // Find Sale BillNumber
-    const billNumber = removedSale.billNumber;
-
-    // Delete Sale Payment Reference in CustomerPayment
-    await CustomerPayment.updateMany(
-      { 'payments.billNumber': billNumber },
-      { $pull: { payments: { billNumber: billNumber } } }
-    ).session(session);
 
     // Commit the transaction
     await session.commitTransaction();
     session.endSession();
 
-    res.json({ status: 'success', message: 'ریکارد ډلیت شو', removedSale });
+    res.json({ status: 'SUCCESS', message: 'ریکارد ډلیت شو' });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error(error);
+    res
+      .status(500)
+      .json({ status: 'failed', message: 'Error processing request' });
+  }
+});
+// Backend route
+
+
+router.get('/getAllExpenses', auth, async (req, res) => {
+  try {
+    const { monthYear } = req.query;
+
+
+
+    // Check if PurchaseCollection for the given month exists
+    const expenseTransactions = await Transaction.find({ monthYear: monthYear._id,transactionType:"expense"  })
+   
+    .populate('expense')
+   
+    .exec(); 
+    if (!expenseTransactions) {
+      return res.json({
+        status: 'FAILED',
+        message: 'مصارف شتون نه لری',
+        data: [],
+      });
+    }
+
+
+
+    return res.json({
+      status: 'SUCCESS',
+      data: expenseTransactions,
+    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({
+      status: 'FAILED',
+      message: 'سرور مشکل',
+    });
+  }
+});
+
+
+router.post('/addExpense', auth, async (req, res) => {
+  // Start a transaction session
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Convert relevant fields to appropriate types
+  
+    // Set the customer and monthYear fields
+  
+    const existingAccount = await CashAccount.findOne({ name: 'Main' });
+    if (!existingAccount) {
+      const cashAccount = new CashAccount({ name: 'Main', balance: 0 });
+      await cashAccount.save({ session });
+      
+    }
+   
+
+
+    req.body.amount = parseFloat(req.body.amount);
+
+    const newExpense = new Expense({
+      amount: parseFloat(req.body.amount),
+      personName: req.body.personName,
+      expenseDate: req.body.expenseDate,
+      monthYear: req.body.collection,
+      reason: req.body.reason
+    });
+
+    // Save the purchase to the database
+   const savedExpense= await newExpense.save({session});
+
+     
+    const newTransactionData = {
+        
+      monthYear:req.body.collection,
+      totalAmount:parseFloat(req.body.amount),
+      paidAmount:parseFloat(req.body.amount),
+      remainingAmount:parseFloat(0),
+      date: req.body.expenseDate,
+       paymentType:'cash',
+       transactionType:'expense',
+       expense:savedExpense._id
+    };
+ 
+
+   
+   
+
+      const newTransaction = new Transaction(newTransactionData);
+
+       await newTransaction.save({ session });
+   
+
+
+        await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: -parseFloat(req.body.amount) } },
+          { new: true, session }
+        );
+
+ 
+ 
+
+            
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Respond with success message and data
+    res.status(201).json({
+      status: 'SUCCESS',
+      message: 'معلومات ثبت شو',
+    
+    });
+    // Commit the transaction
+    
+  } catch (error) {
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error adding sale:', error);
+    res.status(500).json({
+      status: 'FAILED',
+      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی'
+    });
+  }
+});
+
+
+router.post('/deleteExpense', auth, async (req, res) => {
+  
+  
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Find SaleCollection by monthYear
+    const deleteExpense= await Expense.findByIdAndDelete(req.body.expense._id).session(session);
+
+    if(!deleteExpense)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+      }
+      
+      const deleteExpenseTransaction= await Transaction.findByIdAndDelete(req.body._id).session(session);
+
+    if(!deleteExpenseTransaction)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+      }
+      const updateCash=  await CashAccount.findOneAndUpdate(
+        {name: 'Main'},
+        { $inc: { balance: parseFloat(req.body.expense.amount) } },
+        { new: true, session }
+      );
+
+      if(!updateCash)
+        {
+          await session.abortTransaction();
+      session.endSession();
+  
+      return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+        }
+
+  
+
+
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد ډلیت شو' });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -1279,699 +1249,965 @@ router.delete('/deleteSale/:selectedCollection/:id', auth, async (req, res) => {
   }
 });
 
-// router.post('/addExpense', auth, async (req, res) => {
-//   try {
-//     // Convert quantityInTons, quantityInLiters, and totalPrice to Numbers
-//     req.body.amount = parseFloat(req.body.amount);
 
-//     // Create a new purchase instance using the Purchase model
-//     const newExpense = new Expense(req.body);
 
-//     // Save the new purchase to the database
-//     const r = await newExpense.save();
-
-//     if (r) {
-//       res.status(201).json({ status: 'SUCCESS', message: 'معلومات ثبت شو' });
-//     }
-
-//     // Update stock based on the fuel type
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({
-//       status: 'FAILED',
-//       message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی',
-//     });
-//   }
-// });
-///////////////////////////////////////////////////////////////////////////////////////
-router.get('/getAllExpenses', auth, async (req, res) => {
-  try {
-    const { monthYear } = req.query;
-
-    // Check if PurchaseCollection for the given month exists
-    const expenseCollection = await ExpenseCollection.findOne({ monthYear });
-
-    if (!expenseCollection) {
-      return res.json({
-        status: 'FAILED',
-        message: 'مصرف شتون نه لری',
-        data: [],
-      });
-    }
-
-    // Retrieve all purchases for the specified PurchaseCollection
-    const expenses = expenseCollection.expenses;
-
-    if (expenses.length === 0) {
-      return res.json({
-        status: 'FAILED',
-        message: 'مصرف شتون نه لری',
-        data: [],
-      });
-    }
-
-    return res.json(expenses);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({
-      status: 'FAILED',
-      message: 'سرور مشکل',
-    });
-  }
-});
-// router.get('/getAllExpenses', auth, async (req, res) => {
-//   try {
-//     let expenses = await Expense.find();
-//     if (expenses.length === 0) {
-//       return res.json({
-//         status: 'FAILED',
-//         message: ' لګښت شتون نه لری',
-//       });
-//     } else {
-//       return res.json(expenses);
-//     }
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).json({
-//       status: 'FAILED',
-//       message: 'سرور مشکل',
-//     });
-//   }
-// });
-// router.put('/updateExpense', auth, async (req, res) => {
-//   const salesData = req.body;
-
-//   // Clean data by removing null or empty values
-//   const cleanedData = {};
-//   for (const [key, value] of Object.entries(salesData)) {
-//     if (value !== null && value !== undefined && value !== '') {
-//       cleanedData[key] = value;
-//     }
-//   }
-
-//   try {
-//     // If the password is provided in cleanedData, check its length
-
-//     const updatedExpense = await Expense.findOneAndUpdate(
-//       { _id: cleanedData._id },
-//       { $set: cleanedData },
-//       { new: true, useFindAndModify: false }
-//     );
-
-//     if (updatedExpense) {
-//       res.json({ status: 'success', expense: updatedExpense });
-//     } else {
-//       res.status(404).json({ status: 'FAILED', message: 'لګښت پیدا نشو' });
-//     }
-//   } catch (error) {
-//     console.error('Error updating user:', error);
-//     res
-//       .status(500)
-//       .json({ status: 'FAILED', message: 'Internal Server Error' });
-//   }
-// });
 
 router.put('/updateExpense', auth, async (req, res) => {
   const expenseData = req.body;
 
-  // Clean data by removing null or empty values
-  const cleanedData = {};
-  for (const [key, value] of Object.entries(expenseData)) {
-    if (value !== null && value !== undefined && value !== '') {
-      cleanedData[key] = value;
-    }
-  }
+ 
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    // Construct the update query dynamically based on the cleanedData
 
-    // Create an empty object to store the dynamically constructed update data
-    const updateData = {};
-
-    // Iterate over the keys in cleanedData
-    for (const key of Object.keys(cleanedData)) {
-      // Construct the path for each field in the purchases array
-      // For example, if key is 'driverName', the path will be 'purchases.$.driverName'
-      updateData[`expenses.$.${key}`] = cleanedData[key];
+    const newExpenseData = {
+      personName:expenseData.personName,
+      expenseDate:expenseData.expenseDate,
+      amount:expenseData.amount,
+      reason:expenseData.reason
+     
+  
+    };
+    const cleanedData = {};
+    for (const [key, value] of Object.entries(newExpenseData)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedData[key] = value;
+      }
     }
-
-    // Use findOneAndUpdate to find the specific purchase and update only the specified fields
-    const updateExpense = await ExpenseCollection.findOneAndUpdate(
+ 
+   
+    const updateExpense = await Expense.findOneAndUpdate(
       {
-        monthYear: expenseData.selectedCollection,
-        'expenses._id': expenseData._id,
+  
+        _id: expenseData._id,
       },
-      { $set: updateData },
-      { new: true, useFindAndModify: false }
+      { $set: cleanedData },
+      { new: true, useFindAndModify: false,session }
     );
+  
+    if(!updateExpense)
+      {
+        await session.abortTransaction();
+    session.endSession();
 
-    if (updateExpense) {
-      res.json({ status: 'success', message: ' ریکارد تغیر شو' });
-    } else {
-      res.status(404).json({ status: 'FAILED', message: 'ریکارد پیدا نشو' });
-    }
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res
-      .status(500)
-      .json({ status: 'FAILED', message: 'Internal Server Error' });
-  }
-});
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
 
-router.delete('/deleteExpense/:selectedCollection/:id', async (req, res) => {
-  const { selectedCollection, id } = req.params;
 
-  try {
-    // Find the PurchaseCollection with the given monthYear
-    const expenseCollection = await ExpenseCollection.findOne({
-      monthYear: selectedCollection,
-    });
+      const newTransactionData = {
+        
+        
+        totalAmount:expenseData.amount,
+        paidAmount:expenseData.amount,
+        remainingAmount:parseFloat(0),
+        date: expenseData.expenseDate,
+         paymentType:'cash',
+         transactionType:'expense',
+         
+      };
 
-    if (!expenseCollection) {
-      return res.json({
-        status: 'FIELD',
-        message: 'expense Collection not found',
-      });
-    }
-
-    // Find the index of the purchase with the specified id in the purchases array
-    const expenseIndex = expenseCollection.expenses.findIndex(
-      (expense) => expense._id.toString() === id
-    );
-
-    if (expenseIndex === -1) {
-      return res.json({ status: 'FIELD', message: 'expense not found' });
-    }
-
-    // Remove the purchase from the purchases array
-    expenseCollection.expenses.splice(expenseIndex, 1);
-
-    // Save the updated PurchaseCollection to the database
-    await expenseCollection.save();
-
-    res.json({ status: 'success', message: 'Record deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting purchase:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-});
-
-// router.delete('/deleteExpense/:id', async (req, res) => {
-//   const userId = req.params.id;
-
-//   try {
-//     // Perform the deletion logic here
-//     const deletedExpens = await Expense.findByIdAndDelete(userId);
-
-//     if (deletedExpens) {
-//       res.json({ status: 'success', message: 'ریکارد دلیت شو' });
-//     } else {
-//       res.status(404).json({ status: 'error', message: 'ریکارد شتون نه لری' });
-//     }
-//   } catch (error) {
-//     console.error('Error deleting user:', error);
-//     res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-//   }
-// });
-
-// router.post('/addSalary', async (req, res) => {
-//   try {
-//     const {
-//       employeeId,
-//       salaryDate,
-//       salaryMonth,
-//       salaryYear,
-//       salaryAmount,
-//       comment,
-//     } = req.body;
-
-//     // Check if the employeeId is valid
-//     const employee = await Employee.findById(employeeId);
-//     if (!employee) {
-//       return res
-//         .status(400)
-//         .json({ status: 'FAILED', message: 'Invalid employeeId' });
-//     }
-
-//     // Check if a salary record already exists for the specified employee ID, year, and month
-//     const existingSalary = await Salary.findOne({
-//       employee: employeeId,
-//       salaryYear,
-//       salaryMonth,
-//     });
-
-//     if (existingSalary) {
-//       return res.status(400).json({
-//         status: 'FAILED',
-//         message: 'د نومړی میاشتی معاش د مخه اجرا شوی',
-//       });
-//     }
-
-//     // Generate the invoiceNumber with a hyphen and a sequence number
-//     const latestSalary = await Salary.findOne(
-//       {},
-//       {},
-//       { sort: { createdAt: -1 } }
-//     );
-
-//     // Extract the numeric portion, increment it, and add the "sal-" prefix
-//     const lastInvoiceNumber = latestSalary
-//       ? parseInt(latestSalary.invoiceNumber.replace('sal-', ''), 10)
-//       : 0;
-
-//     const invoiceNumber = `sal-${lastInvoiceNumber + 1}`;
-
-//     // Create the new salary record
-//     const newSalary = new Salary({
-//       employee: employeeId,
-//       salaryDate,
-//       salaryMonth,
-//       salaryYear,
-//       salaryAmount,
-//       comment,
-//       invoiceNumber,
-//     });
-
-//     // Save the salary record to the database
-//     await newSalary.save();
-
-//     res.json({
-//       status: 'SUCCESS',
-//       message: 'Salary record added successfully',
-//       data: {
-//         salaryRecord: {
-//           _id: newSalary._id,
-//           employee: employeeId,
-//           salaryDate,
-//           salaryMonth,
-//           salaryYear,
-//           salaryAmount,
-//           comment,
-//           invoiceNumber,
-//         },
-//       },
-//     });
-//   } catch (err) {
-//     console.error(err);
-//     res
-//       .status(500)
-//       .json({ status: 'FAILED', message: 'Internal Server Error' });
-//   }
-// });
-
-router.post('/addSalary', auth, async (req, res) => {
-  try {
-    const {
-      employeeId,
-      salaryDate,
-      salaryMonth,
-      salaryYear,
-      salaryAmount,
-      selectedCollection,
-      comment,
-    } = req.body;
-
-    // Check if the SalaryCollection for the given month exists, create one if not
-    let salaryCollection = await SalaryCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!salaryCollection) {
-      // If SalaryCollection doesn't exist, create a new one with a default status of 'open'
-      salaryCollection = new SalaryCollection({
-        monthYear: selectedCollection,
-        status: 'open',
-        salaries: [],
-      });
-    } else {
-      // Check if the employee has an existing salary record for the specified monthYear
-      const existingSalary = salaryCollection.salaries.find(
-        (salary) =>
-          salary.employee.toString() === employeeId &&
-          salary.salaryMonth === salaryMonth &&
-          salary.salaryYear === salaryYear
-      );
-
-      if (existingSalary) {
-        return res.json({
-          status: 'FAILED',
-          message:
-            'Salary record already exists for the specified employee, month, and year in the selected monthYear',
-        });
+      const cleanedTransactionData = {};
+    for (const [key, value] of Object.entries(newTransactionData)) {
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedTransactionData[key] = value;
       }
     }
 
-    // Generate the invoiceNumber with a hyphen and a sequence number
-    const invoiceNumber = await generateBillNumber();
-
-    // Create a new Salary instance with the generated invoiceNumber
-    const newSalary = new Salary({
-      employee: employeeId,
-      salaryDate,
-      salaryMonth,
-      salaryYear,
-      salaryAmount,
-      comment,
-      invoiceNumber,
-    });
-
-    // Add the new salary to the salaries array in the SalaryCollection
-    salaryCollection.salaries.push(newSalary);
-
-    // Save the updated SalaryCollection to the database
-    const savedSalaryCollection = await salaryCollection.save();
-
-    // Get the newly added salary from the saved SalaryCollection
-    const newSalaryRecord = savedSalaryCollection.salaries.find(
-      (salary) =>
-        salary.employee.toString() === employeeId &&
-        salary.salaryMonth === salaryMonth &&
-        salary.salaryYear === salaryYear
+    const updatePurchaseTransaction = await Transaction.findOneAndUpdate(
+      {
+  
+        _id: expenseData.expenseData._id,
+      },
+      { $set: cleanedTransactionData },
+      { new: true, useFindAndModify: false,session }
     );
+  
+    if(!updatePurchaseTransaction)
+      {
+        await session.abortTransaction();
+    session.endSession();
 
-    res.status(201).json({
-      status: 'SUCCESS',
-      message: 'Salary record added successfully',
-      newSalaryRecord,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      status: 'FAILED',
-      message: 'Internal Server Error',
-    });
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
+
+    if(expenseData.amount !=='' && expenseData.amount !==null && expenseData.amount !==undefined)
+   
+      {
+         const oldPrice=parseFloat(expenseData.expenseData.expense.amount)
+         const newPrice=parseFloat(expenseData.amount)
+        
+         if(oldPrice!==newPrice)
+          {
+
+            const differance=oldPrice-newPrice;
+
+          
+            const updateCash=  await CashAccount.findOneAndUpdate(
+              {name: 'Main'},
+              { $inc: { balance: parseFloat(differance) } },
+              { new: true, session }
+            );
+            
+            if(!updateCash)
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+          }
+
+
+      }
+
+    
+
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد تغیر شو' });
+       
+        } catch (error) {
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error updating Expense:', error);
+    res.status(500).json({ status: 'FAILED', message: 'سرور مشکل' });
   }
 });
 
-router.get('/getSalaryRecord/:id', auth, async (req, res) => {
+
+
+
+async function generateBillNumber(session) {
   try {
-    const salaryId = req.params.id;
+    let newBillNumber;
 
-    // Use Mongoose population to get employee details along with salary
-    const salary = await Salary.findById(salaryId)
-      .populate({
-        path: 'employee',
-        model: 'Employee', // Assuming your Employee model is named 'Employee'
-        select: 'name position NIC contactNumber salary',
-      })
-      .exec();
+    try {
+      // Find the document and update it by incrementing the billNumber
+      const previousBillNumberDocument = await LastBillNumber.findOne().session(session);
 
-    if (!salary) {
-      return res.status(404).json({ error: 'Salary not found' });
+      if (!previousBillNumberDocument) {
+        // If the document doesn't exist, create it with the default value
+        const newDocument = new LastBillNumber();
+        newDocument.billNumber = 1; // Initial bill number
+        await newDocument.save({ session });
+        newBillNumber = newDocument.billNumber;
+      } else {
+        // Increment the existing billNumber and save the updated document
+        const updatedBillNumberDocument = await LastBillNumber.findOneAndUpdate(
+          {},
+          { $inc: { billNumber: 1 } },
+          { new: true, session }
+        );
+        newBillNumber = updatedBillNumberDocument.billNumber;
+      }
+
+      
+      return newBillNumber;
+    } catch (error) {
+      console.error('Error generating bill number:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error generating bill number:', error);
+    throw error;
+  }
+}
+
+
+
+
+
+router.post('/addSale', auth, async (req, res) => {
+  // Start a transaction session
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Convert relevant fields to appropriate types
+    const {
+      quantityInTons,
+      quantityInLiters,
+      totalPrice,
+      pricePerTon,
+      pricePerLiter,
+      totalPaid,
+      remaining,
+      customerId,
+      saleDate,
+      selectedCollection,
+      fuelType,
+      driverName,
+      paymentType,
+      sarafi,
+      personName,
+      paymentDate,
+      receiptNumber,
+      description,
+      plateNumber
+    } = req.body;
+
+    // Set the customer and monthYear fields
+    const customer = customerId;
+    const monthYear = selectedCollection._id;
+
+    const existingAccount = await CashAccount.findOne({ name: 'Main' });
+    if (!existingAccount) {
+      const cashAccount = new CashAccount({ name: 'Main', balance: 0 });
+      await cashAccount.save({ session });
+      
+    }
+    // Generate billNumber using the function and pass the session
+    const billNumber = await generateBillNumber(session);
+
+
+
+    const newSaleData = {
+      customer,
+      monthYear,
+      fuelType,
+      driverName,
+      plateNumber,
+      saleDate,
+      billNumber
+    };
+
+    if (pricePerTon !== '' && pricePerTon !== undefined) {
+      newSaleData.pricePerTon = parseFloat(pricePerTon);
+    }
+    if (pricePerLiter !== '' && pricePerLiter !== undefined) {
+      newSaleData.pricePerLiter = parseFloat(pricePerLiter);
     }
 
-    res.status(200).json(salary);
+    
+    if (quantityInTons !== '' && quantityInTons !== undefined) {
+      newSaleData.quantityInTons = parseFloat(quantityInTons);
+    }
+    if (quantityInLiters !== '' && quantityInLiters !== undefined) {
+      newSaleData.quantityInLiters = parseFloat(quantityInLiters);
+    }
+
+        // Create a new Sale instance
+        const newSale = new Sale(newSaleData);
+
+        const savedSale =  await newSale.save({ session });
+     
+
+
+
+    const newTransactionData = {
+      customer,
+      monthYear,
+      totalAmount:parseFloat(totalPrice),
+      paidAmount:parseFloat(totalPaid),
+      remainingAmount:parseFloat(remaining),
+    };
+      newTransactionData.transactionType='sale'
+newTransactionData.sale=savedSale._id
+
+    if(paymentType==='cash')
+      {
+        newTransactionData.date=saleDate
+        newTransactionData.paymentType='cash'
+        
+      }else
+      {
+        newTransactionData.sarafi=sarafi
+        newTransactionData.personName=personName
+        newTransactionData.paymentType='sarafi'
+        newTransactionData.receipt=receiptNumber
+        newTransactionData.date=paymentDate
+        newTransactionData.description=description
+      }
+   
+
+      const newTransaction = new Transaction(newTransactionData);
+
+      const savedTransaction =  await newTransaction.save({ session });
+   
+        
+             await Customer.findByIdAndUpdate(
+              {_id: customer},
+              { $inc: { balance: -parseFloat(remaining) } },
+              { new: true, session }
+            );
+    
+    if(paymentType==='cash')
+      {
+         await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: parseFloat(totalPaid) } },
+          { new: true, session }
+        );
+
+      }else
+      {
+         await Sarafi.findByIdAndUpdate(
+          {_id: sarafi},
+          { $inc: { balance: parseFloat(totalPaid) } },
+          { new: true, session }
+        );
+      }
+ 
+
+            
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Respond with success message and data
+    res.status(201).json({
+      status: 'SUCCESS',
+      message: 'معلومات ثبت شو',
+    
+    });
+    // Commit the transaction
+    
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error adding sale:', error);
+    res.status(500).json({
+      status: 'FAILED',
+      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی'
+    });
   }
 });
 
-// router.get('/getAllSalaries', auth, async (req, res) => {
-//   try {
-//     let expenses = await Salary.find();
-//     if (expenses.length === 0) {
-//       return res.json({
-//         status: 'FAILED',
-//         message: ' لګښت شتون نه لری',
-//       });
-//     } else {
-//       return res.json(expenses);
-//     }
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).json({
-//       status: 'FAILED',
-//       message: 'سرور مشکل',
-//     });
-//   }
-// });
 
-router.get('/getAllSalaries', auth, async (req, res) => {
+router.get('/getAllSalesRelatedTransactions', auth, async (req, res) => {
   try {
     const { monthYear } = req.query;
 
+    
     // Check if SaleCollection for the given month exists
-    const salaryCollection = await SalaryCollection.findOne({ monthYear });
+    const sales = await Transaction.find({ monthYear: monthYear._id,transactionType:"sale" })
+      .populate('customer')
+      .populate('sale')
+      .populate('sarafi')
+      .exec(); 
 
-    if (!salaryCollection) {
+      console.log(sales)
+    if (!sales || sales.length === 0) {
       return res.json({
         status: 'FAILED',
-        message: 'معاش موجود ندی',
+        message: 'No sales found for the given month',
         data: [],
       });
     }
 
-    // Retrieve all sales for the specified SaleCollection and populate the customer field
-    const salary = await Salary.populate(salaryCollection.salaries, {
-      path: 'employee',
+    
+    return res.json({
+      status: 'SUCCESS',
+      data: sales,
     });
 
-    if (salary.length === 0) {
-      return res.json({
-        status: 'FAILED',
-        message: 'معاش موجود ندی',
-        data: [],
-      });
-    }
-
-    return res.json(salary);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({
       status: 'FAILED',
-      message: 'سرور کی مشکل دی  ',
+      message: 'Server Error',
     });
   }
 });
 
-// router.get('/getAllSalariesFull', auth, async (req, res) => {
-//   try {
-//     let salaries = await Salary.find()
-//       .populate({
-//         path: 'employee',
-//         model: 'Employee', // Assuming your Employee model is named 'Employee'
-//         select: 'name position NIC contactNumber salary',
-//       })
-//       .exec();
-//     if (salaries.length === 0) {
-//       return res.json({
-//         status: 'FAILED',
-//         message: ' معاش شتون نه لری',
-//       });
-//     } else {
-//       return res.json(salaries);
-//     }
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).json({
-//       status: 'FAILED',
-//       message: 'سرور مشکل',
-//     });
-//   }
-// });
 
-// router.put('/updateSalary', auth, async (req, res) => {
-//   const salaryData = req.body;
-
-//   // Clean data by removing null or empty values
-//   const cleanedData = {};
-//   for (const [key, value] of Object.entries(salaryData)) {
-//     if (value !== null && value !== undefined && value !== '') {
-//       cleanedData[key] = value;
-//     }
-//   }
-
-//   try {
-//     // Check if salary entry already exists for the specified employee, month, and year
-
-//     // If the password is provided in cleanedData, check its length
-//     const updatedSalary = await Salary.findOneAndUpdate(
-//       { _id: cleanedData._id },
-//       { $set: cleanedData },
-//       { new: true, useFindAndModify: false }
-//     );
-
-//     if (updatedSalary) {
-//       res.json({ status: 'success', salary: updatedSalary });
-//     } else {
-//       res.status(404).json({ status: 'FAILED', message: 'معاش پیدا نشو' });
-//     }
-//   } catch (error) {
-//     console.error('Error updating user:', error);
-//     res
-//       .status(500)
-//       .json({ status: 'FAILED', message: 'Internal Server Error' });
-//   }
-// });
-
-router.put('/updateSalary', auth, async (req, res) => {
-  const salaryData = req.body;
-
-  // Clean data by removing null or empty values
-  const cleanedData = {};
-  for (const [key, value] of Object.entries(salaryData)) {
-    if (value !== null && value !== undefined && value !== '') {
-      cleanedData[key] = value;
-    }
-  }
-
+router.get('/getAllSales', auth, async (req, res) => {
   try {
-    // Construct the update query dynamically based on the cleanedData
+    const { monthYear } = req.query;
 
-    // Create an empty object to store the dynamically constructed update data
-    const updateData = {};
+    
+    // Check if SaleCollection for the given month exists
+    const salesTransaction = await Sale.find({ monthYear: monthYear._id })
+      .populate('customer')
+      .exec(); 
 
-    // Iterate over the keys in cleanedData
-    for (const key of Object.keys(cleanedData)) {
-      // Construct the path for each field in the purchases array
-      // For example, if key is 'driverName', the path will be 'purchases.$.driverName'
-      updateData[`salaries.$.${key}`] = cleanedData[key];
-    }
-
-    // Use findOneAndUpdate to find the specific purchase and update only the specified fields
-    const updateSalary = await SalaryCollection.findOneAndUpdate(
-      {
-        monthYear: salaryData.selectedCollection,
-        'salaries._id': salaryData._id,
-      },
-      { $set: updateData },
-      { new: true, useFindAndModify: false }
-    );
-
-    if (updateSalary) {
-      res.json({ status: 'success', message: 'ریکارد تغیر شو' });
-    } else {
-      res.status(404).json({ status: 'FAILED', message: 'ریکارد پیدا نشو' });
-    }
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res
-      .status(500)
-      .json({ status: 'FAILED', message: 'Internal Server Error' });
-  }
-});
-
-router.delete('/deleteSalary/:selectedCollection/:id', async (req, res) => {
-  const { selectedCollection, id } = req.params;
-
-  try {
-    // Find the PurchaseCollection with the given monthYear
-    const salaryCollection = await SalaryCollection.findOne({
-      monthYear: selectedCollection,
-    });
-
-    if (!salaryCollection) {
+    if (!sales || sales.length === 0) {
       return res.json({
-        status: 'FIELD',
-        message: 'salary Collection not found',
+        status: 'FAILED',
+        message: 'No sales found for the given month',
+        data: [],
       });
     }
+    console.log(sales)
 
-    // Find the index of the purchase with the specified id in the purchases array
-    const salaryIndex = salaryCollection.salaries.findIndex(
-      (salary) => salary._id.toString() === id
-    );
+    return res.json({
+      status: 'SUCCESS',
+      data: sales,
+    });
 
-    if (salaryIndex === -1) {
-      return res.json({ status: 'FIELD', message: 'salary not found' });
-    }
-
-    // Remove the purchase from the purchases array
-    salaryCollection.salaries.splice(salaryIndex, 1);
-
-    // Save the updated PurchaseCollection to the database
-    await salaryCollection.save();
-
-    res.json({ status: 'success', message: 'Record deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting purchase:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({
+      status: 'FAILED',
+      message: 'Server Error',
+    });
   }
 });
-// router.delete('/deleteSalary/:id', async (req, res) => {
-//   const salaryId = req.params.id;
 
-//   try {
-//     // Perform the deletion logic here
-//     const deletedSalary = await Salary.findByIdAndDelete(salaryId);
+router.put('/updateSale', auth, async (req, res) => {
+  const salesData = req.body;
 
-//     if (deletedSalary) {
-//       res.json({ status: 'success', message: 'ریکارد دلیت شو' });
-//     } else {
-//       res.status(404).json({ status: 'error', message: 'ریکارد شتون نه لری' });
-//     }
-//   } catch (error) {
-//     console.error('Error deleting user:', error);
-//     res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-//   }
-// });
+  
 
-// router.get('/stock', auth, async (req, res) => {
-//   try {
-//     const availableStock = await calculateStock();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-//     res.json({ availableStock });
-//   } catch (error) {
-//     console.error('Error fetching stock:', error);
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// });
-// const calculateStock = async () => {
-//   try {
-//     const fuelTypes = ['petrol', 'diesel', 'gas'];
+  try {
 
-//     const stockByFuelType = [];
 
-//     for (const fuelType of fuelTypes) {
-//       // Get total quantity purchased for the current fuel type
-//       const totalPurchased = await Purchase.aggregate([
-//         {
-//           $match: { fuelType },
-//         },
-//         {
-//           $group: {
-//             _id: null,
-//             totalQuantityLiters: { $sum: '$quantityInLiters' },
-//             totalQuantityTons: { $sum: '$quantityInTons' },
-//           },
-//         },
-//       ]);
+    const newSaleData = {
+      fuelType:salesData.fuelType,
+      driverName:salesData.driverName,
+      plateNumber:salesData.plateNumber,
+      saleDate:salesData.saleDate,
+      billNumber:salesData.billNumber
+    };
 
-//       // Get total quantity sold for the current fuel type
-//       const totalSold = await Sale.aggregate([
-//         {
-//           $match: { fuelType },
-//         },
-//         {
-//           $group: {
-//             _id: null,
-//             totalQuantityLiters: { $sum: '$quantityInLiters' },
-//             totalQuantityTons: { $sum: '$quantityInTons' },
-//           },
-//         },
-//       ]);
+    if (salesData.pricePerTon !== '' && salesData.pricePerTon !== undefined && salesData.pricePerTon !== NaN) {
+      newSaleData.pricePerTon = parseFloat(salesData.pricePerTon);
+      newSaleData.pricePerLiter = null;
+    }
+    if (salesData.pricePerLiter !== '' && salesData.pricePerLiter !== undefined  && salesData.pricePerLiter !== NaN) {
+      newSaleData.pricePerLiter = parseFloat(salesData.pricePerLiter);
+      newSaleData.pricePerTon = null;
+    }
 
-//       // Calculate available stock for the current fuel type
-//       const availableStock = {
-//         fuelType,
-//         quantityInLiters:
-//           (totalPurchased[0]?.totalQuantityLiters || 0) -
-//           (totalSold[0]?.totalQuantityLiters || 0),
-//         quantityInTons:
-//           (totalPurchased[0]?.totalQuantityTons || 0) -
-//           (totalSold[0]?.totalQuantityTons || 0),
-//       };
+    if (!isNaN(salesData.pricePerTon) && salesData.pricePerTon !== '' && salesData.pricePerTon !== undefined) {
+      newSaleData.pricePerTon = parseFloat(salesData.pricePerTon);
+      newSaleData.pricePerLiter = null;
+    } else if (!isNaN(salesData.pricePerLiter) && salesData.pricePerLiter !== '' && salesData.pricePerLiter !== undefined) {
+      newSaleData.pricePerLiter = parseFloat(salesData.pricePerLiter);
+      newSaleData.pricePerTon = null;
+    }
 
-//       stockByFuelType.push(availableStock);
-//     }
+    newSaleData.customer = salesData.customerId;
+    newSaleData.quantityInTons = !isNaN(salesData.quantityInTons) ? parseFloat(salesData.quantityInTons) : null;
+    newSaleData.quantityInLiters = !isNaN(salesData.quantityInLiters) ? parseFloat(salesData.quantityInLiters) : null;
 
-//     return stockByFuelType;
-//   } catch (error) {
-//     console.error('Error calculating stock:', error);
-//     throw error;
-//   }
-// };
+
+    const updateSale= await Sale.findByIdAndUpdate(
+      {_id:salesData.saleData.sale._id},
+      { $set: newSaleData },
+      { new: true, useFindAndModify: false, session }
+    );
+
+    if(!updateSale)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
+
+
+      
+    const newTransactionData = {
+      customer:salesData.customerId,
+      
+      totalAmount:parseFloat(salesData.totalPrice),
+      paidAmount:parseFloat(salesData.totalPaid),
+      remainingAmount:parseFloat(salesData.remaining),
+    };
+     
+
+    if(salesData.paymentType==='cash')
+      {
+        newTransactionData.date=salesData.saleDate
+        newTransactionData.paymentType='cash'
+        
+      }else
+      {
+        newTransactionData.sarafi=salesData.sarafi
+        newTransactionData.personName=salesData.personName
+        newTransactionData.paymentType='sarafi'
+        newTransactionData.receipt=salesData.receiptNumber
+        newTransactionData.date=salesData.paymentDate
+        newTransactionData.description=salesData.description
+      }
+
+
+      const updateTransaction= await Transaction.findByIdAndUpdate(
+        {_id:salesData.saleData._id},
+        { $set: newTransactionData },
+        { new: true, useFindAndModify: false, session }
+      );
+  
+      if(!updateTransaction)
+        {
+          await session.abortTransaction();
+      session.endSession();
+  
+      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+        }
+
+
+    if(salesData.paymentType==='cash' && salesData.saleData.paymentType==='cash' && salesData.customerId==salesData.saleData.customer._id)
+      {
+         if(salesData.totalPaid!=salesData.saleData.paidAmount)
+          {
+             const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
+
+           const updateCash=  await CashAccount.findOneAndUpdate(
+              {name: 'Main'},
+              { $inc: { balance: parseFloat(differance) } },
+              { new: true, session }
+            );
+            
+            if(!updateCash)
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+
+
+             
+          }
+
+
+          if(salesData.remaining !=salesData.saleData.remainingAmount )
+            {
+              const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
+
+              const updateCustomer= await Customer.findByIdAndUpdate(
+                {_id:salesData.customerId},
+                { $inc: { balance: -parseFloat(remainingDifferance) } },
+                { new: true, session }
+              );
+          
+              if(!updateCustomer) 
+                {
+                  await session.abortTransaction();
+              session.endSession();
+          
+              return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                }
+            }
+
+
+      }
+   
+   
+   
+      else  if(salesData.paymentType==='cash' && salesData.saleData.paymentType==='cash' && salesData.customerId!=salesData.saleData.customer._id)
+
+        {
+          if(salesData.totalPaid!=salesData.saleData.paidAmount)
+           
+            {
+               const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
+  
+             const updateCash=  await CashAccount.findOneAndUpdate(
+                {name: 'Main'},
+                { $inc: { balance: parseFloat(differance) } },
+                { new: true, session }
+              );
+              
+              if(!updateCash)
+                {
+                  await session.abortTransaction();
+              session.endSession();
+          
+              return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                }
+  
+  
+               
+            }
+
+
+
+            const updateOldCustomer= await Customer.findByIdAndUpdate(
+              {_id:salesData.saleData.customer._id},
+              { $inc: { balance: parseFloat(salesData.saleData.remainingAmount) } },
+              { new: true, session }
+            );
+        
+            if(!updateOldCustomer)
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+
+
+              const updateNewCustomer= await Customer.findByIdAndUpdate(
+                {_id:salesData.customerId},
+                { $inc: { balance: -parseFloat(salesData.remaining) } },
+                { new: true, session }
+              );
+          
+              if(!updateNewCustomer)
+                {
+                  await session.abortTransaction();
+              session.endSession();
+          
+              return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                }
+          }
+
+
+          
+          else   if(salesData.paymentType==='sarafi' && salesData.saleData.paymentType==='sarafi' && salesData.sarafi=== salesData.saleData.sarafi._id && salesData.customerId==salesData.saleData.customer._id)
+            {
+
+           
+
+
+
+               if(salesData.totalPaid!=salesData.saleData.paidAmount)
+                {
+                   const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
+      
+                 const updateSarafi=  await Sarafi.findOneAndUpdate(
+                    {_id: salesData.sarafi},
+                    { $inc: { balance: parseFloat(differance) } },
+                    { new: true, session }
+                  );
+                  
+                  if(!updateSarafi)
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+      
+      
+                   
+                }
+      
+      
+                if(salesData.remaining !=salesData.saleData.remainingAmount )
+                  {
+                    const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
+      
+                    const updateCustomer= await Customer.findByIdAndUpdate(
+                      {_id:salesData.customerId},
+                      { $inc: { balance: -parseFloat(remainingDifferance) } },
+                      { new: true, session }
+                    );
+                
+                    if(!updateCustomer) 
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+                  }
+      
+      
+            }
+
+            else   if(salesData.paymentType==='sarafi' && salesData.saleData.paymentType==='sarafi' && salesData.sarafi=== salesData.saleData.sarafi._id && salesData.customerId!=salesData.saleData.customer._id)
+              {
+  
+             
+  
+  
+  
+                 if(salesData.totalPaid!=salesData.saleData.paidAmount)
+                  {
+                     const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
+        
+                   const updateSarafi=  await Sarafi.findOneAndUpdate(
+                      {_id: salesData.sarafi},
+                      { $inc: { balance: parseFloat(differance) } },
+                      { new: true, session }
+                    );
+                    
+                    if(!updateSarafi)
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+        
+        
+                     
+                  }
+        
+        
+                  const updateOldCustomer= await Customer.findByIdAndUpdate(
+                    {_id:salesData.saleData.customer._id},
+                    { $inc: { balance: parseFloat(salesData.saleData.remainingAmount) } },
+                    { new: true, session }
+                  );
+              
+                  if(!updateOldCustomer)
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+      
+      
+                    const updateNewCustomer= await Customer.findByIdAndUpdate(
+                      {_id:salesData.customerId},
+                      { $inc: { balance: -parseFloat(salesData.remaining) } },
+                      { new: true, session }
+                    );
+                
+                    if(!updateNewCustomer)
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+        
+        
+              }
+           
+              else   if(salesData.paymentType==='sarafi' && salesData.saleData.paymentType==='sarafi' && salesData.sarafi!= salesData.saleData.sarafi._id && salesData.customerId==salesData.saleData.customer._id)
+                {
+    
+               
+          
+          
+                    const updateOldSarafi= await Sarafi.findByIdAndUpdate(
+                      {_id:salesData.saleData.sarafi._id},
+                      { $inc: { balance: -parseFloat(salesData.saleData.paidAmount) } },
+                      { new: true, session }
+                    );
+                
+                    if(!updateOldSarafi)
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+        
+        
+                      const updateNewSarafi= await Sarafi.findByIdAndUpdate(
+                        {_id:salesData.sarafi},
+                        { $inc: { balance: parseFloat(salesData.totalPaid) } },
+                        { new: true, session }
+                      );
+                  
+                      if(!updateNewSarafi)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+          
+
+                        if(salesData.remaining !=salesData.saleData.remainingAmount )
+                          {
+                            const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
+              
+                            const updateCustomer= await Customer.findByIdAndUpdate(
+                              {_id:salesData.customerId},
+                              { $inc: { balance: -parseFloat(remainingDifferance) } },
+                              { new: true, session }
+                            );
+                        
+                            if(!updateCustomer) 
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+                          }
+              
+          
+                }
+                else   if(salesData.paymentType==='sarafi' && salesData.saleData.paymentType==='sarafi' && salesData.sarafi!= salesData.saleData.sarafi._id && salesData.customerId!=salesData.saleData.customer._id)
+                  {
+      
+                 
+            
+            
+                      const updateOldSarafi= await Sarafi.findByIdAndUpdate(
+                        {_id:salesData.saleData.sarafi._id},
+                        { $inc: { balance: -parseFloat(salesData.saleData.paidAmount) } },
+                        { new: true, session }
+                      );
+                  
+                      if(!updateOldSarafi)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+          
+          
+                        const updateNewSarafi= await Sarafi.findByIdAndUpdate(
+                          {_id:salesData.sarafi},
+                          { $inc: { balance: parseFloat(salesData.totalPaid) } },
+                          { new: true, session }
+                        );
+                    
+                        if(!updateNewSarafi)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+            
+  
+                          const updateOldCustomer= await Customer.findByIdAndUpdate(
+                            {_id:salesData.saleData.customer._id},
+                            { $inc: { balance: parseFloat(salesData.saleData.remainingAmount) } },
+                            { new: true, session }
+                          );
+                      
+                          if(!updateOldCustomer)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+              
+              
+                            const updateNewCustomer= await Customer.findByIdAndUpdate(
+                              {_id:salesData.customerId},
+                              { $inc: { balance: -parseFloat(salesData.remaining) } },
+                              { new: true, session }
+                            );
+                        
+                            if(!updateNewCustomer)
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+                  }
+         
+
+                  
+
+              // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد تغیر شو' });
+       
+        } catch (error) {
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error updating sale:', error);
+    res.status(500).json({ status: 'FAILED', message: 'سرور مشکل' });
+  }
+});
+
+
+
+
+router.post('/deleteSale', auth, async (req, res) => {
+  const { saleData } = req.body;
+
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Find SaleCollection by monthYear
+    const deleteSale= await Sale.findByIdAndDelete(saleData.sale._id).session(session);
+
+    if(!deleteSale)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+      }
+    const updateCustomer= await Customer.findByIdAndUpdate(
+      {_id: saleData.customer._id},
+      { $inc: { balance: parseFloat(saleData.remainingAmount) } },
+      { new: true, session }
+    );
+
+    if(!updateCustomer)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+      }
+
+     if(saleData.paymentType==='cash')
+      {
+      const updateCash=  await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: -parseFloat(saleData.paidAmount) } },
+          { new: true, session }
+        );
+
+        if(!updateCash)
+          {
+            await session.abortTransaction();
+        session.endSession();
+    
+        return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+          }
+    
+      }else
+      {
+        const updateSarafi=await Sarafi.findByIdAndUpdate(
+          {_id: saleData.sarafi._id},
+          { $inc: { balance: -parseFloat(saleData.paidAmount) } },
+          { new: true, session }
+        );
+        if(!updateSarafi)
+          {
+            await session.abortTransaction();
+        session.endSession();
+    
+        return res.json({ status: 'FIELD', message: 'ریکارد ډلیت نه شو' });
+          }
+      }
+
+    // Delete Sale Reference in CustomerPayment
+    await Transaction.findByIdAndDelete(
+    saleData._id
+    ).session(session);
+
+
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد ډلیت شو' });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error(error);
+    res
+      .status(500)
+      .json({ status: 'failed', message: 'Error processing request' });
+  }
+});
+
+
+
+
+
+
 
 router.get('/purchaseStock', auth, async (req, res) => {
   try {
@@ -2018,39 +2254,216 @@ router.get('/saleStock', auth, async (req, res) => {
   }
 });
 
-router.get('/getCustomerPaymentRecord/:customerId', async (req, res) => {
+router.get('/getCustomerCashPaymentRecord/:customerId', async (req, res) => {
   try {
     const customerId = req.params.customerId;
 
     // Find the customer payments based on the customer ID
-    const customerPayments = await CustomerPayment.find({
+    const customerPayments = await CashAccount.find({
       customer: customerId,
-    });
+    }).populate('sale')
+    .exec();;
 
+    
     // Check if the customer payments exist
     if (!customerPayments) {
       return res
-        .status(404)
-        .json({ status: 'FIELD', message: 'Customer payments not found' });
+        
+        .json({ status: 'FIELD',data:[], message: 'Customer payments not found' });
     }
-    if (customerPayments.length === 0) {
-      return res
-        .status(404)
-        .json({ status: 'FIELD', message: 'Customer payments not found' });
-    }
+    
 
-    // Extract and filter payments for debit type
-    const paymentInfo = customerPayments.map((payment) => ({
-      customer: payment.customer,
-      payments: payment.payments,
-    }));
+    
 
-    res.json(paymentInfo);
+    res.json({ status: 'SUCCESS',data: customerPayments});
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+router.get('/getCustomerSarafiPaymentRecord/:customerId', async (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+
+    // Find the customer payments based on the customer ID
+    const customerPayments = await SarafiAcoount.find({
+      customer: customerId,
+    }).populate('sale')
+    .populate('sarafi')
+    .exec();
+
+    
+    // Check if the customer payments exist
+    if (!customerPayments) {
+      return res
+       
+        .json({ status: 'FIELD', data:[], message: 'Customer payments not found' });
+    }
+    
+
+    
+
+    res.json({ status: 'SUCCESS',data: customerPayments});
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+router.get('/getCutomerById/:customerId', async (req, res) => {
+  try {
+    
+    const customerId = req.params.customerId;
+    
+    // Find the customer payments based on the customer ID
+    const customer = await Customer.findById(customerId)
+
+    
+    // Check if the customer payments exist
+    if (!customer) {
+      return res
+       
+        .json({ status: 'FIELD', message: 'Customer not found' });
+    }
+    
+
+    res.json({ status: 'SUCCESS',data: customer});
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getSarafiById/:sarafiId', async (req, res) => {
+  try {
+    
+    const sarafiId = req.params.sarafiId;
+    
+    // Find the customer payments based on the customer ID
+    const sarafi = await Sarafi.findById(sarafiId)
+
+    
+    // Check if the customer payments exist
+    if (!sarafi) {
+      return res
+       
+        .json({ status: 'FIELD', message: 'Sarafi not found' });
+    }
+    
+
+    res.json({ status: 'SUCCESS',data: sarafi});
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+router.get('/getTransactionByCustomerIdAndMonthYear/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+   
+    // Find the transactions based on the customer ID and monthYear
+    const transactions = await Transaction.find({
+      customer: customerId,
+      // monthYear: monthYear,
+    })
+     .populate('sale') 
+    .populate('sarafi')
+    .exec(); ;
+
+    // Check if transactions exist
+    if (transactions.length === 0) {
+      return res.status(404).json({ status: 'FAILED', data: [], message: 'Transactions not found' });
+    }
+
+    res.json({ status: 'SUCCESS', data: transactions });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'ERROR', message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getTransactionBySarafiIdAndMonthYear/:sarafiId', async (req, res) => {
+  try {
+    const { sarafiId } = req.params;
+    
+   
+    // Find the transactions based on the sarafiId ID and monthYear
+    const transactions = await Transaction.find({
+      sarafi: sarafiId,
+      paymentType:'sarafi'
+      // monthYear: monthYear,
+    })
+     
+    .populate('customer')
+    .exec(); ;
+
+    // Check if transactions exist
+    if (transactions.length === 0) {
+      return res.status(404).json({ status: 'FAILED', data: [], message: 'Transactions not found' });
+    }
+
+    res.json({ status: 'SUCCESS', data: transactions });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'ERROR', message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getTransactionOfCashPayment/:monthYear', async (req, res) => {
+  try {
+   
+      const {monthYear}=req.params;
+   
+    
+    // Find the transactions based on the sarafiId ID and monthYear
+    const transactions = await Transaction.find({
+      paymentType:'cash',
+     
+       monthYear: monthYear,
+    })
+    
+    .populate('customer')
+    .exec(); ;
+
+    // Check if transactions exist
+    if (transactions.length === 0) {
+      return res.status(404).json({ status: 'FAILED', data: [], message: 'Transactions not found' });
+    }
+
+    res.json({ status: 'SUCCESS', data: transactions });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'ERROR', message: 'Internal Server Error' });
+  }
+});
+
+
+router.get('/getCash', async (req, res) => {
+  try {
+    
+    // Find the cash account based on the name
+    const cash = await CashAccount.findOne({ name: 'Main' });
+
+   
+    if (!cash) {
+      return res.json({ status: 'FIELD', message: 'Cash account not found' });
+    }
+
+   
+
+    res.json({ status: 'SUCCESS', data: cash });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+
 router.get('/getDateTime', (req, res) => {
   const currentDateTime = new Date();
   res.json({ dateTime: currentDateTime });
@@ -2095,69 +2508,153 @@ router.get('/average-cost-per-liter', async (req, res) => {
   }
 });
 
-router.post('/updateAccount', auth, async (req, res) => {
+
+
+
+router.post('/addPayment', auth, async (req, res) => {
+  // Start a transaction session
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    let payment;
-    // Convert quantityInTons, quantityInLiters, and totalPrice to Numbers
+    // Convert relevant fields to appropriate types
+    
+      const {customer_id,
+        collection,
+        paidamount,
+        transactionType,
+        paymentType,
+        personName,
+        receiptNumber,
+        description,
+        sarafi,
+        date}=req.body
 
-    // Set the billNumber before saving the new sale
-    const billNumber = await generateBillNumber();
+   
 
-    // Save the new sale to the database
+    // Set the customer and monthYear fields
+    const customer = customer_id;
+    const monthYear = collection;
 
-    // Check if a customerPayment record with the given customerId already exists
-    const existingCustomerPayment = await CustomerPayment.findOne({
-      customer: req.body.customer_id,
-    });
-
-    if (existingCustomerPayment) {
-      // Update existing record by adding the sale information
-
-      // Update payment information
-      existingCustomerPayment.payments.push({
-        amount: req.body.amount,
-        paymentDate: req.body.paymentDate,
-        type: req.body.type, // You can adjust this based on your logic
-        reason: req.body.reason,
-        billNumber: billNumber,
-      });
-
-      // Save the updated customerPayment record
-      payment = await existingCustomerPayment.save();
-    } else {
-      // Create a new customerPayment record
-      const customerPayment = new CustomerPayment({
-        customer: req.body.customer_id,
-        payments: [
-          {
-            amount: req.body.amount,
-            paymentDate: req.body.paymentDate,
-            type: req.body.type, // You can adjust this based on your logic
-            reason: req.body.reason,
-            billNumber: billNumber,
-          },
-        ],
-      });
-
-      // Save the customerPayment record to the database
-      payment = await customerPayment.save();
+    const existingAccount = await CashAccount.findOne({ name: 'Main' });
+    if (!existingAccount) {
+      const cashAccount = new CashAccount({ name: 'Main', balance: 0 });
+      await cashAccount.save({ session });
+      
     }
+   
+    const newTransactionData = {
+      customer,
+      monthYear,
+      transactionType,
+      date,
+      paymentType,
+      description,
+      totalAmount:parseFloat(paidamount),
+      paidAmount:parseFloat(paidamount),
+      remainingAmount:parseFloat(0),
+    };
+     
+    if(paymentType==='sarafi')
+      {
+        newTransactionData.sarafi=sarafi
+        newTransactionData.personName=personName
+        newTransactionData.receipt=receiptNumber
+      }
+   
 
-    // Commit the transaction
+      const newTransaction = new Transaction(newTransactionData);
 
-    res.json({
+      const savedTransaction =  await newTransaction.save({ session });
+   
+        
+      if(transactionType==='deposit')
+        {
+          await Customer.findByIdAndUpdate(
+            {_id: customer},
+            { $inc: { balance: parseFloat(paidamount) } },
+            { new: true, session }
+          );
+
+
+          
+    if(paymentType==='cash')
+      {
+         await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: parseFloat(paidamount) } },
+          { new: true, session }
+        );
+
+      }else
+      {
+         await Sarafi.findByIdAndUpdate(
+          {_id: sarafi},
+          { $inc: { balance: parseFloat(paidamount) } },
+          { new: true, session }
+        );
+      }
+
+
+
+        }else if(transactionType==='withdrawal')
+          {
+            await Customer.findByIdAndUpdate(
+              {_id: customer},
+              { $inc: { balance: -parseFloat(paidamount) } },
+              { new: true, session }
+            );
+
+
+
+            
+    if(paymentType==='cash')
+      {
+         await CashAccount.findOneAndUpdate(
+          {name: 'Main'},
+          { $inc: { balance: -parseFloat(paidamount) } },
+          { new: true, session }
+        );
+
+      }else
+      {
+         await Sarafi.findByIdAndUpdate(
+          {_id: sarafi},
+          { $inc: { balance: -parseFloat(paidamount) } },
+          { new: true, session }
+        );
+      }
+
+
+
+
+          }
+             
+    
+ 
+
+            
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Respond with success message and data
+    res.status(201).json({
       status: 'SUCCESS',
       message: 'معلومات ثبت شو',
-
-      payment,
+    
     });
+    // Commit the transaction
+    
   } catch (error) {
     // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
 
-    console.error(error);
+    console.error('Error adding sale:', error);
     res.status(500).json({
       status: 'FAILED',
-      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی',
+      message: 'سرور کی مشکل دی لطفا دوباره کوشش وکړی'
     });
   }
 });
@@ -2170,7 +2667,7 @@ router.delete(
 
     try {
       // Find the customer payment by ID
-      const customerPayment = await CustomerPayment.findOne({
+      const customerPayment = await CashAccount.findOne({
         customer: customerId,
       });
 
@@ -2203,63 +2700,1050 @@ router.delete(
   }
 );
 
-router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
-  const { _id, billNumber, customerId, amount, reason, type, date } = req.body;
 
-  const paymentDate = date;
-  // Clean data by removing null or empty values
-  const cleanedData = {};
-  for (const [key, value] of Object.entries({
-    _id,
-    amount,
-    reason,
-    customerId,
-    type,
-    billNumber,
-    paymentDate,
-  })) {
-    if (value !== null && value !== undefined && value !== '') {
-      cleanedData[key] = value;
-    }
-  }
+router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
+  const accountData = req.body;
+
+  console.log('acc',accountData)
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    // Use await to execute the findOne query
-    const existingCustomerPaymentRecord = await CustomerPayment.findOne({
-      customer: customerId,
-    });
 
-    // Find the index of the payment record to update
-    const paymentIndex = existingCustomerPaymentRecord.payments.findIndex(
-      (payment) => payment._id.toString() === _id
+
+
+    if(accountData.paymentType==='cash' && accountData.transactionType==='deposit' && accountData.selectedRowData.transactionType==='deposit')
+    {
+
+ const newTransactionData = {
+  paidAmount:accountData.paidAmount,
+  totalAmount:accountData.paidAmount,
+  date:accountData.date,
+  description:accountData.description
+     
+    };
+
+
+    const updateTransaction= await Transaction.findByIdAndUpdate(
+      {_id:accountData.selectedRowData._id},
+      { $set: newTransactionData },
+      { new: true, useFindAndModify: false, session }
     );
 
-    // Check if the payment with the given ID was found
-    if (paymentIndex !== -1) {
-      // Update the payment record in the payments array
-      existingCustomerPaymentRecord.payments[paymentIndex] = {
-        ...existingCustomerPaymentRecord.payments[paymentIndex],
-        ...cleanedData,
-      };
+    if(!updateTransaction)
+      {
+        await session.abortTransaction();
+    session.endSession();
 
-      // Save the updated customer payment
-      await existingCustomerPaymentRecord.save();
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
 
-      return res.json({
-        status: 'SUCCESS',
-        message: 'ریکارد تغیر شو',
-      });
-    } else {
-      return res.json({
-        status: 'FAILED',
-        message: 'معلومات پیدا نه شو',
-      });
+
+      if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+        {
+           const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+
+         const updateCash=  await CashAccount.findOneAndUpdate(
+            {name: 'Main'},
+            { $inc: { balance: parseFloat(differance) } },
+            { new: true, session }
+          );
+          
+          if(!updateCash)
+            {
+              await session.abortTransaction();
+          session.endSession();
+      
+          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+            }
+
+
+
+            
+            const updateCustomer= await Customer.findByIdAndUpdate(
+              {_id:accountData.selectedRowData.customer},
+              { $inc: { balance: parseFloat(differance) } },
+              { new: true, session }
+            );
+        
+            if(!updateCustomer) 
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+           
+        }
+
+
     }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: 'Internal Server Error',
-    });
+
+    else  if(accountData.paymentType==='cash' && accountData.transactionType==='withdrawal' && accountData.selectedRowData.transactionType==='withdrawal')
+    {
+
+ const newTransactionData = {
+  paidAmount:accountData.paidAmount,
+  totalAmount:accountData.paidAmount,
+  date:accountData.date,
+  description:accountData.description
+     
+    };
+
+
+    const updateTransaction= await Transaction.findByIdAndUpdate(
+      {_id:accountData.selectedRowData._id},
+      { $set: newTransactionData },
+      { new: true, useFindAndModify: false, session }
+    );
+
+    if(!updateTransaction)
+      {
+        await session.abortTransaction();
+    session.endSession();
+
+    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+      }
+
+
+      if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+        {
+           const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+
+         const updateCash=  await CashAccount.findOneAndUpdate(
+            {name: 'Main'},
+            { $inc: { balance: -parseFloat(differance) } },
+            { new: true, session }
+          );
+          
+          if(!updateCash)
+            {
+              await session.abortTransaction();
+          session.endSession();
+      
+          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+            }
+
+
+
+            
+            const updateCustomer= await Customer.findByIdAndUpdate(
+              {_id:accountData.selectedRowData.customer},
+              { $inc: { balance: -parseFloat(differance) } },
+              { new: true, session }
+            );
+        
+            if(!updateCustomer) 
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+           
+        }
+
+
+    }
+
+   else if(accountData.paymentType==='cash' && accountData.transactionType==='withdrawal' && accountData.selectedRowData.transactionType==='deposit')
+      {
+  
+   const newTransactionData = {
+    paidAmount:accountData.paidAmount,
+    totalAmount:accountData.paidAmount,
+    date:accountData.date,
+    description:accountData.description,
+    transactionType:accountData.transactionType
+       
+      };
+  
+  
+      const updateTransaction= await Transaction.findByIdAndUpdate(
+        {_id:accountData.selectedRowData._id},
+        { $set: newTransactionData },
+        { new: true, useFindAndModify: false, session }
+      );
+  
+      if(!updateTransaction)
+        {
+          await session.abortTransaction();
+      session.endSession();
+  
+      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+        }
+  
+  
+        
+             
+           const updateCash=  await CashAccount.findOneAndUpdate(
+              {name: 'Main'},
+              { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+              { new: true, session }
+            );
+            
+            if(!updateCash)
+              {
+                await session.abortTransaction();
+            session.endSession();
+        
+            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+              }
+  
+  
+  
+              
+              const updateCustomerOld= await Customer.findByIdAndUpdate(
+                {_id:accountData.selectedRowData.customer},
+                { $inc: { balance: -parseFloat(accountData.selectedRowData.paidAmount) } },
+                { new: true, session }
+              );
+          
+              if(!updateCustomerOld) 
+                {
+                  await session.abortTransaction();
+              session.endSession();
+          
+              return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                }
+
+                const updateCustomer= await Customer.findByIdAndUpdate(
+                  {_id:accountData.selectedRowData.customer},
+                  { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+                  { new: true, session }
+                );
+            
+                if(!updateCustomer) 
+                  {
+                    await session.abortTransaction();
+                session.endSession();
+            
+                return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                  }
+             
+          
+  
+  
+      }
+      
+      else if(accountData.paymentType==='cash' && accountData.transactionType==='deposit' && accountData.selectedRowData.transactionType==='withdrawal')
+        {
+    
+     const newTransactionData = {
+      paidAmount:accountData.paidAmount,
+      totalAmount:accountData.paidAmount,
+      date:accountData.date,
+      description:accountData.description,
+      transactionType:accountData.transactionType
+         
+        };
+    
+    
+        const updateTransaction= await Transaction.findByIdAndUpdate(
+          {_id:accountData.selectedRowData._id},
+          { $set: newTransactionData },
+          { new: true, useFindAndModify: false, session }
+        );
+    
+        if(!updateTransaction)
+          {
+            await session.abortTransaction();
+        session.endSession();
+    
+        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+          }
+    
+    
+          
+               
+             const updateCash=  await CashAccount.findOneAndUpdate(
+                {name: 'Main'},
+                { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                { new: true, session }
+              );
+              
+              if(!updateCash)
+                {
+                  await session.abortTransaction();
+              session.endSession();
+          
+              return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                }
+    
+    
+    
+                
+                const updateCustomerOld= await Customer.findByIdAndUpdate(
+                  {_id:accountData.selectedRowData.customer},
+                  { $inc: { balance: parseFloat(accountData.selectedRowData.paidAmount) } },
+                  { new: true, session }
+                );
+            
+                if(!updateCustomerOld) 
+                  {
+                    await session.abortTransaction();
+                session.endSession();
+            
+                return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                  }
+  
+                  const updateCustomer= await Customer.findByIdAndUpdate(
+                    {_id:accountData.selectedRowData.customer},
+                    { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                    { new: true, session }
+                  );
+              
+                  if(!updateCustomer) 
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+               
+            
+    
+    
+        }
+
+        else  if(accountData.paymentType==='sarafi' && accountData.transactionType==='deposit' && accountData.selectedRowData.transactionType==='deposit')
+          {
+           
+
+            if(accountData.sarafi._id ==accountData.selectedRowData.sarafi._id)
+            {
+         
+              const newTransactionData = {
+                paidAmount:accountData.paidAmount,
+                totalAmount:accountData.paidAmount,
+                date:accountData.date,
+                description:accountData.description,
+                receipt: accountData.receipt,
+                personName:accountData.personName
+                  };
+
+                  const updateTransaction= await Transaction.findByIdAndUpdate(
+                    {_id:accountData.selectedRowData._id},
+                    { $set: newTransactionData },
+                    { new: true, useFindAndModify: false, session }
+                  );
+              
+                  if(!updateTransaction)
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+
+
+
+                    
+            if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+              {
+                 const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+      
+               const updateSarafi=  await Sarafi.findOneAndUpdate(
+                  {_id: accountData.sarafi._id},
+                  { $inc: { balance: parseFloat(differance) } },
+                  { new: true, session }
+                );
+                
+                if(!updateSarafi)
+                  {
+                    await session.abortTransaction();
+                session.endSession();
+            
+                return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                  }
+      
+      
+      
+                  
+                  const updateCustomer= await Customer.findByIdAndUpdate(
+                    {_id:accountData.selectedRowData.customer},
+                    { $inc: { balance: parseFloat(differance) } },
+                    { new: true, session }
+                  );
+              
+                  if(!updateCustomer) 
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+                 
+              }
+      
+
+            }
+            else  
+              {
+           
+              
+                const newTransactionData = {
+                  paidAmount:accountData.paidAmount,
+                  totalAmount:accountData.paidAmount,
+                  date:accountData.date,
+                  description:accountData.description,
+                  receipt: accountData.receipt,
+                  personName:accountData.personName,
+                  sarafi:accountData.sarafi
+                    };
+  
+                    const updateTransaction= await Transaction.findByIdAndUpdate(
+                      {_id:accountData.selectedRowData._id},
+                      { $set: newTransactionData },
+                      { new: true, useFindAndModify: false, session }
+                    );
+                
+                    if(!updateTransaction)
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+  
+  
+  
+                   
+                      const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                        {_id: accountData.selectedRowData.sarafi._id},
+                        { $inc: { balance: -parseFloat(accountData.selectedRowData.paidAmount) } },
+                        { new: true, session }
+                      );
+                      
+                      if(!updateSarafiOld)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+            
+            
+                       
+                        
+                      const updateSarafi=  await Sarafi.findOneAndUpdate(
+                        {_id: accountData.sarafi},
+                        { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                        { new: true, session }
+                      );
+                      
+                      console.log('new sarafi',updateSarafi)
+                        
+                      if(!updateSarafi)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+            
+                        
+                    
+        
+  
+          
+                        if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+                          {
+
+                            
+                             const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+                             console.log('diff',differance)
+                        const updateCustomer= await Customer.findByIdAndUpdate(
+                          {_id:accountData.selectedRowData.customer},
+                          { $inc: { balance: parseFloat(differance) } },
+                          { new: true, session }
+                        );
+                    
+                        if(!updateCustomer) 
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+                        }
+          
+          
+          
+          
+                      }
+
+
+      
+      
+      
+      
+         
+      
+      
+      
+          }
+
+          else  if(accountData.paymentType==='sarafi' && accountData.transactionType==='withdrawal' && accountData.selectedRowData.transactionType==='withdrawal')
+            {
+             
+  
+              if(accountData.sarafi._id ==accountData.selectedRowData.sarafi._id)
+              {
+           
+                const newTransactionData = {
+                  paidAmount:accountData.paidAmount,
+                  totalAmount:accountData.paidAmount,
+                  date:accountData.date,
+                  description:accountData.description,
+                  receipt: accountData.receipt,
+                  personName:accountData.personName
+                    };
+  
+                    const updateTransaction= await Transaction.findByIdAndUpdate(
+                      {_id:accountData.selectedRowData._id},
+                      { $set: newTransactionData },
+                      { new: true, useFindAndModify: false, session }
+                    );
+                
+                    if(!updateTransaction)
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+  
+  
+  
+                      
+              if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+                {
+                   const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+        
+                 const updateSarafi=  await Sarafi.findOneAndUpdate(
+                    {_id: accountData.sarafi._id},
+                    { $inc: { balance: -parseFloat(differance) } },
+                    { new: true, session }
+                  );
+                  
+                  if(!updateSarafi)
+                    {
+                      await session.abortTransaction();
+                  session.endSession();
+              
+                  return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                    }
+        
+        
+        
+                    
+                    const updateCustomer= await Customer.findByIdAndUpdate(
+                      {_id:accountData.selectedRowData.customer},
+                      { $inc: { balance: -parseFloat(differance) } },
+                      { new: true, session }
+                    );
+                
+                    if(!updateCustomer) 
+                      {
+                        await session.abortTransaction();
+                    session.endSession();
+                
+                    return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                      }
+                   
+                }
+        
+  
+              }
+              else  
+                {
+             
+                
+                  const newTransactionData = {
+                    paidAmount:accountData.paidAmount,
+                    totalAmount:accountData.paidAmount,
+                    date:accountData.date,
+                    description:accountData.description,
+                    receipt: accountData.receipt,
+                    personName:accountData.personName,
+                    sarafi:accountData.sarafi
+                      };
+    
+                      const updateTransaction= await Transaction.findByIdAndUpdate(
+                        {_id:accountData.selectedRowData._id},
+                        { $set: newTransactionData },
+                        { new: true, useFindAndModify: false, session }
+                      );
+                  
+                      if(!updateTransaction)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+    
+    
+    
+                     
+                        const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                          {_id: accountData.selectedRowData.sarafi._id},
+                          { $inc: { balance: parseFloat(accountData.selectedRowData.paidAmount) } },
+                          { new: true, session }
+                        );
+                        
+                        if(!updateSarafiOld)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+              
+              
+                         
+                          
+                        const updateSarafi=  await Sarafi.findOneAndUpdate(
+                          {_id: accountData.sarafi},
+                          { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+                          { new: true, session }
+                        );
+                        
+                        console.log('new sarafi',updateSarafi)
+                          
+                        if(!updateSarafi)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+              
+                          
+                      
+          
+    
+            
+                          if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
+                            {
+  
+                              
+                               const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
+                               
+                          const updateCustomer= await Customer.findByIdAndUpdate(
+                            {_id:accountData.selectedRowData.customer},
+                            { $inc: { balance: -parseFloat(differance) } },
+                            { new: true, session }
+                          );
+                      
+                          if(!updateCustomer) 
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+                          }
+            
+            
+            
+            
+                        }
+  
+  
+        
+        
+        
+        
+           
+        
+        
+        
+            }
+
+            else  if(accountData.paymentType==='sarafi' && accountData.transactionType==='deposit' && accountData.selectedRowData.transactionType==='withdrawal')
+              {
+               
+    
+                if(accountData.sarafi._id ==accountData.selectedRowData.sarafi._id)
+                {
+             
+                  const newTransactionData = {
+                    paidAmount:accountData.paidAmount,
+                    totalAmount:accountData.paidAmount,
+                    date:accountData.date,
+                    description:accountData.description,
+                    receipt: accountData.receipt,
+                    personName:accountData.personName,
+                    transactionType:accountData.transactionType
+                      };
+    
+                      const updateTransaction= await Transaction.findByIdAndUpdate(
+                        {_id:accountData.selectedRowData._id},
+                        { $set: newTransactionData },
+                        { new: true, useFindAndModify: false, session }
+                      );
+                  
+                      if(!updateTransaction)
+                        {
+                          await session.abortTransaction();
+                      session.endSession();
+                  
+                      return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                        }
+    
+    
+
+
+                        const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                          {_id: accountData.sarafi._id},
+                          { $inc: { balance: parseFloat(accountData.selectedRowData.paidAmount) } },
+                          { new: true, session }
+                        );
+                        
+                        if(!updateSarafiOld)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+              
+              
+    
+                          
+                        const updateSarafi=  await Sarafi.findOneAndUpdate(
+                          {_id: accountData.sarafi._id},
+                          { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                          { new: true, session }
+                        );
+                        
+                        if(!updateSarafi)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+              
+
+                        
+                        
+              
+    
+                }
+                else  
+                  {
+               
+                    const newTransactionData = {
+                      paidAmount:accountData.paidAmount,
+                      totalAmount:accountData.paidAmount,
+                      date:accountData.date,
+                      description:accountData.description,
+                      receipt: accountData.receipt,
+                      personName:accountData.personName,
+                      transactionType:accountData.transactionType,
+                      sarafi:accountData.sarafi
+                        };
+                  
+                    
+      
+                        const updateTransaction= await Transaction.findByIdAndUpdate(
+                          {_id:accountData.selectedRowData._id},
+                          { $set: newTransactionData },
+                          { new: true, useFindAndModify: false, session }
+                        );
+                    
+                        if(!updateTransaction)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+      
+      
+      
+                       
+                          const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                            {_id: accountData.selectedRowData.sarafi._id},
+                            { $inc: { balance: parseFloat(accountData.selectedRowData.paidAmount) } },
+                            { new: true, session }
+                          );
+                          
+                          if(!updateSarafiOld)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+                
+                
+                           
+                            
+                          const updateSarafi=  await Sarafi.findOneAndUpdate(
+                            {_id: accountData.sarafi},
+                            { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                            { new: true, session }
+                          );
+                          
+                          console.log('new sarafi',updateSarafi)
+                            
+                          if(!updateSarafi)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+                
+                            
+                        
+            
+      
+              
+                       
+              
+              
+                          }
+    
+    
+          
+                          const updateCustomerOld= await Customer.findByIdAndUpdate(
+                            {_id:accountData.selectedRowData.customer},
+                            { $inc: { balance: parseFloat(accountData.selectedRowData.paidAmount) } },
+                            { new: true, session }
+                          );
+                      
+                          if(!updateCustomerOld) 
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+          
+                            
+                          const updateCustomer= await Customer.findByIdAndUpdate(
+                            {_id:accountData.selectedRowData.customer},
+                            { $inc: { balance: parseFloat(accountData.paidAmount) } },
+                            { new: true, session }
+                          );
+                      
+                          if(!updateCustomer) 
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+             
+          
+          
+          
+              }
+
+              else  if(accountData.paymentType==='sarafi' && accountData.transactionType==='withdrawal' && accountData.selectedRowData.transactionType==='deposit')
+                {
+                 
+      
+                  if(accountData.sarafi._id ==accountData.selectedRowData.sarafi._id)
+                  {
+               
+                    const newTransactionData = {
+                      paidAmount:accountData.paidAmount,
+                      totalAmount:accountData.paidAmount,
+                      date:accountData.date,
+                      description:accountData.description,
+                      receipt: accountData.receipt,
+                      personName:accountData.personName,
+                      transactionType:accountData.transactionType
+                        };
+      
+                        const updateTransaction= await Transaction.findByIdAndUpdate(
+                          {_id:accountData.selectedRowData._id},
+                          { $set: newTransactionData },
+                          { new: true, useFindAndModify: false, session }
+                        );
+                    
+                        if(!updateTransaction)
+                          {
+                            await session.abortTransaction();
+                        session.endSession();
+                    
+                        return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                          }
+      
+      
+  
+  
+                          const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                            {_id: accountData.sarafi._id},
+                            { $inc: { balance: -parseFloat(accountData.selectedRowData.paidAmount) } },
+                            { new: true, session }
+                          );
+                          
+                          if(!updateSarafiOld)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+                
+                
+      
+                            
+                          const updateSarafi=  await Sarafi.findOneAndUpdate(
+                            {_id: accountData.sarafi._id},
+                            { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+                            { new: true, session }
+                          );
+                          
+                          if(!updateSarafi)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+                
+  
+                          
+                          
+                
+      
+                  }
+                  else  
+                    {
+                 
+                      const newTransactionData = {
+                        paidAmount:accountData.paidAmount,
+                        totalAmount:accountData.paidAmount,
+                        date:accountData.date,
+                        description:accountData.description,
+                        receipt: accountData.receipt,
+                        personName:accountData.personName,
+                        transactionType:accountData.transactionType,
+                        sarafi:accountData.sarafi
+                          };
+                    
+                      
+        
+                          const updateTransaction= await Transaction.findByIdAndUpdate(
+                            {_id:accountData.selectedRowData._id},
+                            { $set: newTransactionData },
+                            { new: true, useFindAndModify: false, session }
+                          );
+                      
+                          if(!updateTransaction)
+                            {
+                              await session.abortTransaction();
+                          session.endSession();
+                      
+                          return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                            }
+        
+        
+        
+                         
+                            const updateSarafiOld=  await Sarafi.findOneAndUpdate(
+                              {_id: accountData.selectedRowData.sarafi._id},
+                              { $inc: { balance: -parseFloat(accountData.selectedRowData.paidAmount) } },
+                              { new: true, session }
+                            );
+                            
+                            if(!updateSarafiOld)
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+                  
+                  
+                             
+                              
+                            const updateSarafi=  await Sarafi.findOneAndUpdate(
+                              {_id: accountData.sarafi},
+                              { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+                              { new: true, session }
+                            );
+                            
+                            console.log('new sarafi',updateSarafi)
+                              
+                            if(!updateSarafi)
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+                  
+                              
+                          
+              
+        
+                
+                         
+                
+                
+                            }
+      
+      
+            
+                            const updateCustomerOld= await Customer.findByIdAndUpdate(
+                              {_id:accountData.selectedRowData.customer},
+                              { $inc: { balance: -parseFloat(accountData.selectedRowData.paidAmount) } },
+                              { new: true, session }
+                            );
+                        
+                            if(!updateCustomerOld) 
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+            
+                              
+                            const updateCustomer= await Customer.findByIdAndUpdate(
+                              {_id:accountData.selectedRowData.customer},
+                              { $inc: { balance: -parseFloat(accountData.paidAmount) } },
+                              { new: true, session }
+                            );
+                        
+                            if(!updateCustomer) 
+                              {
+                                await session.abortTransaction();
+                            session.endSession();
+                        
+                            return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                              }
+               
+            
+            
+            
+                }
+
+
+            
+              // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ status: 'SUCCESS', message: 'ریکارد تغیر شو' });
+       
+        } catch (error) {
+    // Rollback the transaction in case of an error
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error updating sale:', error);
+    res.status(500).json({ status: 'FAILED', message: 'سرور مشکل' });
   }
 });
 
@@ -2275,12 +3759,12 @@ router.post('/addManagmentCollection', async (req, res) => {
       return res.json({ status: 'FAILED', message: 'ریکارد موجود دی' });
     }
 
-    // Create the new salary record
+
     const newCollection = new CollectionsDateManagement({
       collectionName: formattedDate,
     });
 
-    // Save the salary record to the database
+
     await newCollection.save();
 
     res.json({
@@ -2297,14 +3781,18 @@ router.post('/addManagmentCollection', async (req, res) => {
 
 router.get('/getAvailableCollections', auth, async (req, res) => {
   try {
-    let expenses = await CollectionsDateManagement.find();
-    if (expenses.length === 0) {
+    let collections = await CollectionsDateManagement.find();
+    if (collections.length === 0) {
       return res.json({
         status: 'FAILED',
-        message: ' لګښت شتون نه لری',
+        message: ' ټولګه شتون نه لری',
       });
     } else {
-      return res.json(expenses);
+      
+      return res.json({
+        status: 'SUCCESS',
+        data:collections
+      });
     }
   } catch (err) {
     console.error(err.message);
