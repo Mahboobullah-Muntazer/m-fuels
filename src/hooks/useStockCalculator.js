@@ -32,8 +32,9 @@ const useStockCalculator = (selectedCollection, user) => {
 
         if (purchaseResponse.data.status !== 'FAILED') {
           setIsLoading(false);
+          console.log("stackCalculator Purchase",purchaseResponse.data.data);
           const processedPurchaseData = processPurchaseData(
-            purchaseResponse.data
+            purchaseResponse.data.data
           );
           setPurchaseData(processedPurchaseData);
         } else {
@@ -43,10 +44,9 @@ const useStockCalculator = (selectedCollection, user) => {
         }
       } catch (err) {
         setIsLoading(false);
-        const errors = err.response.data.errors;
-        if (errors) {
-          console.log('error' + errors);
-        }
+       
+          console.log('error' + err);
+        
       }
     };
 
@@ -108,8 +108,8 @@ const useStockCalculator = (selectedCollection, user) => {
 
         if (saleResponse.data.status !== 'FAILED') {
           setIsLoading(false);
-          console.log('saD', saleResponse.data);
-          const processedSaleData = processSaleData(saleResponse.data);
+          console.log('saD', saleResponse.data.data);
+          const processedSaleData = processSaleData(saleResponse.data.data);
           setSaleData(processedSaleData);
 
           // Calculate available stock
@@ -120,10 +120,9 @@ const useStockCalculator = (selectedCollection, user) => {
         }
       } catch (err) {
         setIsLoading(false);
-        const errors = err.response.data.errors;
-        if (errors) {
-          console.log('error' + errors);
-        }
+      
+          console.log('error' + err);
+        
       }
     };
 

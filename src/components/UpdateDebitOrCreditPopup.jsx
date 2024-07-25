@@ -2,67 +2,179 @@ import React, { useState, useEffect } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import PropTypes from 'prop-types';
-import { useLocation } from 'react-router-dom';
+
 import { useAuthContext } from '../hooks/useAuthContext';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
+import LoadingDropDown from './LoadingDropDown';
+import SearchAbleDropDown from './SearchAbleDropDown';
+import useAxiosGet from '../hooks/useAxiosGet';
 
-const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, selectedRowData }) => {
+const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, availableCollections, selectedRowData }) => {
   const [validationErrors, setValidationErrors] = useState({});
   const [buttonClicked, setButtonClicked] = useState(false);
 
-  const location = useLocation();
 
   const { user } = useAuthContext();
   const SERVER_PATH = process.env.REACT_APP_SERVER_PATH;
 
   const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [sarafis, setSarafis] = useState([]);
+  const [cash,setCash]=useState('')
+
   const [formData, setFormData] = useState({
-    _id:selectedRowData?._id || '',
-    customerId: customer_id,
-    amount: selectedRowData?.amount || '',
-    reason: selectedRowData?.reason || '',
-    type: selectedRowData?.type || 'credit',
-    date: selectedRowData?.paymentDate || '',
+    paidAmount: '',
+    transactionType:'',
+    paymentType:'',
+    personName:'',
+    receiptNumber:'',
+    description:'',
+    sarafi:'',
+    contactNumber:'',
+    balance:'',
+    date: '',
+    
   });
 
-  const handleUpdate = async () => {
+
+  const {
+    response: getCashResponse,
+    isLoading: getCashLoading,
+    sendRequest:getCashRequest,
+  } = useAxiosGet();
+
+  useEffect(() => {
    
-    const errors = {};
-    const amountString = String(formData.amount);
+    getAllSarafis();
+    handleFetchCash();
+  }, [user.token,selectedRowData]);
 
+  useEffect(() => {
+  setFormData(selectedRowData)
+  }, [selectedRowData]);
+
+  const handleFetchCash=async()=>{
+
+   
+
+    const getCash = `${SERVER_PATH}api/actions/getCash`;
+
+    try {
+      await getCashRequest(getCash);
+    } catch (error) {
+      toast.error(error.message, { position: 'top-right' });
+    }
+
+
+  }
+
+  useEffect(() => {
+    
+    if (getCashResponse) {
+
+     
+          setCash(getCashResponse);
+    }
+  }, [getCashResponse]);
+
+  const getAllSarafis = async function () {
+    const config = {
+      headers: {
+        'x-auth-token': user.token,
+      },
+    };
+    try {
+    
+      const res = await axios.get(SERVER_PATH + 'api/actions/getAllSarafis', config);
+
+      if (res.data.status !== 'FAILED') {
+     
+        const sortedSarafis = res.data.sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        setSarafis(sortedSarafis);
+        setLoading(false);
+       
+      } else {
+       
+        
+      }
+    } catch (err) {
+      
+      const errors = err.response.data.errors;
+      if (errors) {
+        console.log('error' + errors);
+      }
+    }
+  };
+
+
+
+  const handleSarafiSelect = (selectedValue) => {
+    if (selectedValue) {
+      // Extract the specific fields you want to update from selectedValue
+      const {_id,contactNumber,balance} = selectedValue;
+  
+     
+      // Update only the specific fields in formData
+      setFormData((prevFormData) => ({
+        ...prevFormData,
+        contactNumber,
+        balance,
+        sarafi: _id
+      }));
+  
+     
+    }
+  };
+
+  console.log("update data,",selectedRowData)
+  const handleUpdate = async () => {
+
+    
+    
+    
+    const amountString = String(formData.paidAmount);
+    
     if (!amountString.trim()) {
-      errors.amount = 'مقدار ضروری دی ';
+      toast.warning('مقدار ضروری دی')
+      return;
     }
-    if (!formData.reason.trim()) {
-      errors.reason = 'دلیل ضروری دی';
-    }
+   
     if (!formData.date) {
-      errors.date = 'تاریخ ضروری دی';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
+      
+      toast.warning('تاریخ ضروری دی')
       return;
     }
 
-    if (
-     formData.customerId !== undefined &&
-      formData.customerId !== null &&
-      formData.customerId !== '' &&
-      formData._id !== undefined &&
-      formData._id !== null &&
-      formData._id !== ''
-    ){
-      const {   _id,
-        customerId,
-        amount,
-        reason,
-        type,
-        date}=formData;
+    if(formData.paymentType=='sarafi' && !formData.personName)
+    {
+     
+      toast.warning('شخص نوم ضروری دی')
+      return;
+    }
 
-        const {billNumber }=selectedRowData
+   
+
+   
+
+    
+      const {  
+        paidAmount,
+        transactionType,
+        paymentType,
+        personName,
+        receiptNumber,
+        description,
+        sarafi,
+        contactNumber,
+        balance,
+        date,
+
+      }=formData;
+
+       
       const config = {
         headers: {
           'Content-Type': 'application/json',
@@ -70,13 +182,15 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
         },
       };
       const body = JSON.stringify({
-        _id,
-    customerId,
-    amount,
-    reason,
-    type,
-    date,
-    billNumber
+        paidAmount,
+        transactionType,
+        paymentType,
+        personName,
+        receiptNumber,
+        description,
+        sarafi,
+        date,
+        selectedRowData
     
       });
   
@@ -119,7 +233,7 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
           });
         }
       }
-    }
+    
 
    
 
@@ -140,9 +254,7 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
   if(confirmDelete)
   {
     if (
-      customer_id !== undefined &&
-      customer_id !== null &&
-      customer_id !== '' &&
+  
       selectedRowData._id !== undefined &&
       selectedRowData._id !== null &&
       selectedRowData._id !== ''
@@ -158,9 +270,9 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
         setIsLoading(true);
         setButtonClicked(true)
         // Include the _id in the URL
-        console.log(selectedRowData._id, customer_id);
+        console.log(selectedRowData._id);
         const res = await axios.delete(
-          `${SERVER_PATH}api/actions/deleteCustomerAccountRecord/${customer_id}/${selectedRowData._id}`,
+          `${SERVER_PATH}api/actions/deleteCustomerAccountRecord/${selectedRowData._id}`,
           config
         );
 
@@ -203,7 +315,7 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
     const { name, value } = e.target;
 
     // Allow only numbers in the amount field
-    if (name === 'amount' && isNaN(value)) {
+    if (name === 'paidAmount' && isNaN(value)) {
       toast.error('صرف 0-9 نمبر داخل کیدای شی ', {
         position: 'top-right',
       });
@@ -218,64 +330,110 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
 
   return (
     <div className="fixed inset-0 z-50 overflow-auto bg-gray-900 bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-md w-96 shadow-md">
-        <label className="block mb-2 text-sm font-bold">Amount: مقدار</label>
-        <input
-          type="text"
-          name="amount"
-          value={formData.amount}
-          onChange={handleInputChange}
-          placeholder="Enter amount"
-          className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:border-blue-500 ${
-            validationErrors.amount ? 'border-red-500' : ''
-          }`}
-        />
-        {validationErrors.amount && (
-          <p className="text-sm text-red-500">{validationErrors.amount}</p>
-        )}
-
-        <label className="block mt-4 mb-2 text-sm font-bold">Reason:دلیل</label>
-        <input
-          type="text"
-          name="reason"
-          value={formData.reason}
-          onChange={handleInputChange}
-          placeholder="Enter reason"
-          className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:border-blue-500 ${
-            validationErrors.reason ? 'border-red-500' : ''
-          }`}
-        />
-        {validationErrors.reason && (
-          <p className="text-sm text-red-500">{validationErrors.reason}</p>
-        )}
-
-        <label className="block mt-4 mb-2 text-sm font-bold">Type:ډول</label>
-        <div className="flex space-x-4">
+      <div className="bg-white grid grid-cols-1 md:grid-cols-2 gap-2 p-2 rounded-md w-3/4 shadow-md">
+     
+      <div> 
+       <div className='mb-4' >
+          <label className="block  mb-2 text-sm font-bold">Transaction Type</label>
+          <div className="flex space-x-4 border-1 p-2">
           <label className="flex items-center">
             <input
               type="radio"
-              name="type"
-              value="credit"
-              checked={formData.type === 'credit'}
+              name="transactionType"
+              value="deposit"
+              checked={formData.transactionType === 'deposit'}
               onChange={handleInputChange}
               className="mr-2"
             />
-            Credit / وصول
+            Deposit / جمع کول
           </label>
           <label className="flex items-center">
             <input
               type="radio"
-              name="type"
-              value="debit"
-              checked={formData.type === 'debit'}
+              name="transactionType"
+              value="withdrawal"
+              checked={formData.transactionType === 'withdrawal'}
               onChange={handleInputChange}
               className="mr-2"
             />
-            Debit / پور
+            Withdrawal / اخستل
           </label>
         </div>
+        {validationErrors.transactionType && (
+          <p className="text-sm text-red-500">{validationErrors.transactionType}</p>
+        )}
+          </div>
+        </div>
 
-        <label className="block mt-4 mb-2 text-sm font-bold">Date:نیټه</label>
+        <div><label className="block mb-2 text-sm font-bold">Amount: مقدار</label>
+        <input
+          type="text"
+          name="paidAmount"
+          value={formData?.paidAmount}
+          onChange={handleInputChange}
+          placeholder={selectedRowData?.paidAmount}
+          className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:border-blue-500 ${
+            validationErrors.paidamount ? 'border-red-500' : ''
+          }`} 
+        />
+        {validationErrors.paidamount && (
+          <p className="text-sm text-red-500">{validationErrors.paidAmount}</p>
+        )}</div>
+
+ 
+
+       <div> 
+       <div className='mb-4' >
+          <label className="block  mb-2 text-sm font-bold">Payment Type/تادیه ډول</label>
+          <div className="flex space-x-4 border-1 bg-slate-300 p-2">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="paymentType"
+              value="cash"
+              checked={formData.paymentType === 'cash'}
+            disabled
+              className="mr-2"
+            />
+            Cash / نقده
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="paymentType"
+              value="sarafi"
+              checked={formData.paymentType === 'sarafi'}
+              disabled
+              className="mr-2"
+            />
+            Sarafi / صرافی
+          </label>
+        </div>
+        {validationErrors.paymentType && (
+          <p className="text-sm text-red-500">{validationErrors.paymentType}</p>
+        )}
+          </div>
+        </div>
+
+       {formData?.paymentType==='cash' &&  <div className='mb-4 '>
+            <label
+              htmlFor='balance'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+             available cash balance /موجوده نقده بلانس
+            </label>
+            <input
+              type='text'
+              name='balance'
+               value={cash?.balance}
+            disabled
+              placeholder=' available cash / موجوده نقدی'
+              className='w-full border bg-slate-300 dark:border-none dark:bg-gray-700 dark:text-gray-200 rounded-md px-3 py-2 mt-1'
+            />
+                    
+          </div>}
+
+       <div> <label className="block  mb-2 text-sm font-bold">Date:نیټه</label>
         <input
           type="date"
           name="date"
@@ -287,36 +445,161 @@ const UpdateDebitOrCreditPopup = ({ onUpdate, onDelete, onCancel, customer_id, s
         />
         {validationErrors.date && (
           <p className="text-sm text-red-500">{validationErrors.date}</p>
-        )}
+        )}</div>
 
-        <div className="flex justify-end mt-6 space-x-4">
+        
+      {formData.paymentType==='sarafi' &&   
+        <div className='mb-4'>
+           
+           <label
+                 htmlFor='sarafi'
+                 className='block dark:text-gray-200 text-sm font-medium  '
+               >
+                 Sarafi / صرافی  
+                 ----- <strong className='text-blue-800'>{formData?.sarafi?.name}</strong>
+               </label>
+             
+               <div className='flex'>
+               {loading ? (
+                 // Show loading indicator while data is being fetched
+               <LoadingDropDown/>
+               ) : (
+               
+                 // Render supplier options once data is fetched
+                  <SearchAbleDropDown options={sarafis.map((item) => ({ value: item, label: item.name }))} onSelect={handleSarafiSelect} />
+   
+               )}
+               
+                 </div>
+                 {validationErrors.sarafi && (
+          <p className="text-sm text-red-500">{validationErrors.sarafi}</p>
+        )}
+               
+             </div>
+          }
+
+
+{formData.paymentType==='sarafi' &&   <div className='mb-4 '>
+            <label
+              htmlFor='contactNumber'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+              contact number / صرافی تلفون شماره
+            </label>
+            <input
+              type='text'
+              name='contactNumber'
+              value={formData.contactNumber}
+            disabled
+              placeholder={selectedRowData?.sarafi?.contactNumber}
+              className='w-full border bg-slate-200 dark:border-none dark:bg-gray-700 rounded-md px-3 py-2 mt-1'
+            />
+                    
+          </div>
+          
+   }
+
+{formData.paymentType==='sarafi' &&   <div className='mb-4 '>
+            <label
+              htmlFor='balance'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+             available sarafi balance /موجوده صرافی بلانس 
+            </label>
+            <input
+              type='text'
+              name='balance'
+              value={formData.balance}
+            disabled
+              placeholder={selectedRowData?.sarafi?.balance}
+              className='w-full border bg-slate-200 dark:border-none dark:bg-gray-700  rounded-md px-3 py-2 mt-1'
+            />
+                    
+          </div>
+          
+   }
+
+    {formData.paymentType==='sarafi' &&   <div className='mb-4'>
+            <label
+              htmlFor='personName'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+              Paid by / د چا لخوا
+            </label>
+            <input
+              type='text'
+              name='personName'
+              value={formData.personName}
+              onChange={handleInputChange}
+              placeholder=' Paid by / د چا لخوا'
+              className='w-full border dark:border-none dark:bg-gray-700 dark:text-gray-200 rounded-md px-3 py-2 mt-1'
+            />
+                     {validationErrors.personName && (
+          <p className="text-sm text-red-500">{validationErrors.personName}</p>
+        )}
+          </div>
+          
+   }
+
+
+
+          {formData.paymentType==='sarafi' &&   <div className='mb-4'>
+            <label
+              htmlFor='receiptNumber'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+              Receipt Number / د رسید شماره
+            </label>
+            <input
+              type='text'
+              name='receiptNumber'
+              value={formData.receiptNumber}
+              onChange={handleInputChange}
+              placeholder=' Receipt Number / د رسید شماره'
+              className='w-full border dark:border-none dark:bg-gray-700 dark:text-gray-200 rounded-md px-3 py-2 mt-1'
+            />
+          </div>
+   }
+
+  <div className='mb-4'>
+            <label
+              htmlFor='description'
+              className='block dark:text-gray-200 text-sm font-medium  '
+            >
+              Description / توضیحات
+            </label>
+            <textarea
+             
+              name='description'
+              value={formData.description}
+              onChange={handleInputChange}
+              placeholder='    Description / توضیحات'
+              className='w-full border dark:border-none dark:bg-gray-700 dark:text-gray-200 rounded-md px-3 py-2 mt-1'
+            />
+          </div>
+   
+
+
+<div className="flex justify-end mt-6 space-x-4">
         <button
-            onClick={handleUpdate}
-            disabled={buttonClicked}
+             onClick={handleUpdate}
+            disabled={buttonClicked} // Disable the button if it has been clicked
             className={`px-4 py-2 ${
               buttonClicked ? 'bg-gray-500 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
             } text-white rounded-md focus:outline-none`}
           >
-            {buttonClicked ? 'updating...' : 'Update / تغیرول'}
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={buttonClicked}
-            className={`px-4 py-2 ${
-              buttonClicked ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'
-            } text-white rounded-md focus:outline-none`} >
-            {buttonClicked ? 'waiting...' : 'Delete /دلیت'}
-          
+            {buttonClicked ? 'Saving...' : 'Save / ثبتول'}
           </button>
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none"
           >
-            Cancel / لغوه  
+            Cancel /لغوه 
           </button>
         </div>
       </div>
-      <ToastContainer />
+   
+        <ToastContainer />
     </div>
   );
 };

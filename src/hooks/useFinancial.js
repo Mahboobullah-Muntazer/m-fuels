@@ -17,38 +17,7 @@ const useFinancial = (selectedCollection, user) => {
         },
       };
 
-      try {
-        setIsFloading(true);
-
-        // Fetch salary data
-        const salaryResponse = await axios.get(
-          SERVER_PATH + 'api/actions/getAllSalaries',
-          {
-            ...config,
-            params: {
-              monthYear: selectedCollection,
-            },
-          }
-        );
-
-        if (salaryResponse.data.status !== 'FAILED') {
-          setIsFloading(false);
-          const processedSalaryData = processSalaryData(salaryResponse.data);
-          setSalaryData(processedSalaryData);
-        } else {
-          setIsFloading(false);
-          setTotalSalary(0);
-          setSalaryData(salaryResponse.data.data);
-          console.log(salaryResponse);
-        }
-      } catch (err) {
-        setIsFloading(false);
-        const errors = err.response.data.errors;
-        if (errors) {
-          console.log('error' + errors);
-        }
-      }
-
+      
       try {
         setIsFloading(true);
 
@@ -66,7 +35,7 @@ const useFinancial = (selectedCollection, user) => {
         if (expensesResponse.data.status !== 'FAILED') {
           setIsFloading(false);
           const processedExpensesData = processExpensesData(
-            expensesResponse.data
+            expensesResponse.data.data
           );
           setExpensesData(processedExpensesData);
         } else {
@@ -84,20 +53,6 @@ const useFinancial = (selectedCollection, user) => {
       }
     };
 
-    const processSalaryData = (data) => {
-      // Process your salary data as needed
-      // ...
-      setIsFloading(true);
-      // Calculate total salary
-      const totalSalary = data.reduce(
-        (acc, salary) => acc + salary.salaryAmount,
-        0
-      );
-
-      setTotalSalary(totalSalary);
-      setIsFloading(false);
-      return data;
-    };
 
     const processExpensesData = (data) => {
       // Process your expenses data as needed
@@ -118,7 +73,7 @@ const useFinancial = (selectedCollection, user) => {
     fetchData();
   }, [selectedCollection, user.token]);
 
-  return { isFloading, salaryData, expensesData, totalSalary, totalExpense };
+  return { isFloading, expensesData, totalExpense };
 };
 
 export default useFinancial;
