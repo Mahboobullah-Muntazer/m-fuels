@@ -33,6 +33,7 @@ const Sarafi = require('../../lib/sarafi');
 
 
 const Transaction = require('../../lib/transaction');
+const Stock = require('../../lib/stock');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -744,6 +745,7 @@ router.post('/addPurchase', auth, async (req, res) => {
       
     }
    
+   
 
 
     const newPurchase = new Purchase({
@@ -770,8 +772,21 @@ router.post('/addPurchase', auth, async (req, res) => {
           { new: true, session }
         );
 
- 
- 
+        const updatedStock =  await Stock.findOneAndUpdate(
+          { fuelType: req.body.fuelType },  // corrected from {name: req.body.fuelType}
+          { 
+            $inc: { 
+              quantityInLiters: parseFloat(req.body.quantityInLiters), 
+              quantityInTons: parseFloat(req.body.quantityInTons) 
+            } 
+          },
+          { new: true, session }
+        );
+
+        updatedStock.quantityInLiters = Math.round(updatedStock.quantityInLiters * 100) / 100;
+updatedStock.quantityInTons = Math.round(updatedStock.quantityInTons * 100) / 100;
+
+await updatedStock.save({ session });
         const newTransactionData = {
         
           monthYear:req.body.collection,
@@ -864,6 +879,7 @@ console.log(monthYear)
 router.put('/updatePurchase', auth, async (req, res) => {
   const purchaseData = req.body;
 
+  
  
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -955,10 +971,11 @@ router.put('/updatePurchase', auth, async (req, res) => {
 
             const differance=oldPrice-newPrice;
 
-          
+            const roundedDifference = Math.round(differance * 100) / 100;
+         
             const updateCash=  await CashAccount.findOneAndUpdate(
               {name: 'Main'},
-              { $inc: { balance: parseFloat(differance) } },
+              { $inc: { balance: parseFloat(roundedDifference) } },
               { new: true, session }
             );
             
@@ -975,6 +992,305 @@ router.put('/updatePurchase', auth, async (req, res) => {
       }
 
     
+      if(purchaseData.fuelType===purchaseData.purchaseData.purchase.fuelType)
+      {
+        if(purchaseData.quantityInLiters!='' && purchaseData.quantityInLiters!=null &&  purchaseData.quantityInLiters!=undefined)
+        {
+          const oldQuantity=parseFloat(purchaseData.purchaseData.purchase.quantityInLiters)
+          const newQuantity=parseFloat(purchaseData.quantityInLiters)
+         
+          if(oldQuantity!==newQuantity)
+           {
+ 
+             const differance=oldQuantity-newQuantity;
+             const roundedDifference = Math.round(differance * 100) / 100;
+         
+            const updatedStock= await Stock.findOneAndUpdate(
+              { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+              { 
+                $inc: { 
+                  quantityInLiters: -parseFloat(roundedDifference), 
+                 
+                } 
+              },
+              { new: true, session }
+            );
+             
+             
+             if(!updatedStock)
+               {
+                 await session.abortTransaction();
+             session.endSession();
+         
+             return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+               }
+           }
+
+           updatedStock.quantityInLiters = Math.round(updatedStock.quantityInLiters * 100) / 100;
+          
+           
+           await updatedStock.save({ session });
+
+
+        }
+
+        if(purchaseData.quantityInTons!='' && purchaseData.quantityInTons!=null &&  purchaseData.quantityInTons!=undefined)
+          {
+            const oldQuantity=parseFloat(purchaseData.purchaseData.purchase.quantityInTons)
+            const newQuantity=parseFloat(purchaseData.quantityInTons)
+           
+            if(oldQuantity!==newQuantity)
+             {
+   
+               const differance=oldQuantity-newQuantity;
+               const roundedDifference = Math.round(differance * 100) / 100;
+         
+              const updatedStock= await Stock.findOneAndUpdate(
+                { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+                { 
+                  $inc: { 
+                    quantityInTons: -parseFloat(roundedDifference), 
+                   
+                  } 
+                },
+                { new: true, session }
+              );
+               
+               
+               if(!updatedStock)
+                 {
+                   await session.abortTransaction();
+               session.endSession();
+           
+               return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                 }
+
+                
+                 updatedStock.quantityInTons = Math.round(updatedStock.quantityInTons * 100) / 100;
+                 
+                 await updatedStock.save({ session });
+      
+             }
+          }
+      }else
+      {
+
+        if(purchaseData.quantityInLiters!='' && purchaseData.quantityInLiters!=null &&  purchaseData.quantityInLiters!=undefined)
+          {
+
+            const updateStockOld= await Stock.findOneAndUpdate(
+              { fuelType: purchaseData.purchaseData.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+              { 
+                $inc: { 
+                  quantityInLiters: -parseFloat(purchaseData.purchaseData.purchase.quantityInLiters), 
+                 
+                } 
+              },
+              { new: true, session }
+            );
+             
+             
+             if(!updateStockOld)
+               {
+                 await session.abortTransaction();
+             session.endSession();
+         
+             return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+               }
+
+               updateStockOld.quantityInLiters = Math.round(updateStockOld.quantityInLiters * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStockOld.save({ session });
+    
+               const updateStock= await Stock.findOneAndUpdate(
+                { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+                { 
+                  $inc: { 
+                    quantityInLiters: parseFloat(purchaseData.quantityInLiters), 
+                  
+                  } 
+                },
+                { new: true, session }
+              );
+               
+               
+               if(!updateStock)
+                 {
+                   await session.abortTransaction();
+               session.endSession();
+           
+               return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                 }
+
+                 updateStock.quantityInLiters = Math.round(updateStock.quantityInLiters * 100) / 100;
+
+                 // Save the rounded values back to the database
+                 await updateStock.save({ session });
+
+          }else
+          {
+            const updateStockOld= await Stock.findOneAndUpdate(
+              { fuelType: purchaseData.purchaseData.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+              { 
+                $inc: { 
+                  quantityInLiters: -parseFloat(purchaseData.purchaseData.purchase.quantityInLiters), 
+                 
+                } 
+              },
+              { new: true, session }
+            );
+             
+             
+             if(!updateStockOld)
+               {
+                 await session.abortTransaction();
+             session.endSession();
+         
+             return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+               }
+
+               updateStockOld.quantityInLiters = Math.round(updateStockOld.quantityInLiters * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStockOld.save({ session });
+
+    
+               const updateStock= await Stock.findOneAndUpdate(
+                { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+                { 
+                  $inc: { 
+                    quantityInLiters: parseFloat(purchaseData.purchaseData.purchase.quantityInLiters), 
+                  
+                  } 
+                },
+                { new: true, session }
+              );
+               
+               
+               if(!updateStock)
+                 {
+                   await session.abortTransaction();
+               session.endSession();
+           
+               return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                 }
+
+                 updateStock.quantityInLiters = Math.round(updateStock.quantityInLiters * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStock.save({ session });
+          }
+
+          if(purchaseData.quantityInTons!='' && purchaseData.quantityInTons!=null &&  purchaseData.quantityInTons!=undefined)
+            {
+  
+              const updateStockOld= await Stock.findOneAndUpdate(
+                { fuelType: purchaseData.purchaseData.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+                { 
+                  $inc: { 
+                    quantityInTons: -parseFloat(purchaseData.purchaseData.purchase.quantityInTons), 
+                   
+                  } 
+                },
+                { new: true, session }
+              );
+               
+               
+               if(!updateStockOld)
+                 {
+                   await session.abortTransaction();
+               session.endSession();
+           
+               return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                 }
+
+               
+                 updateStockOld.quantityInTons = Math.round(updateStockOld.quantityInTons * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStockOld.save({ session });
+
+      
+                 const updateStock= await Stock.findOneAndUpdate(
+                  { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+                  { 
+                    $inc: { 
+                      quantityInTons: parseFloat(purchaseData.quantityInTons), 
+                    
+                    } 
+                  },
+                  { new: true, session }
+                );
+                 
+                 
+                 if(!updateStock)
+                   {
+                     await session.abortTransaction();
+                 session.endSession();
+             
+                 return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                   }
+
+                   updateStock.quantityInTons = Math.round(updateStock.quantityInTons * 100) / 100;
+
+                   // Save the rounded values back to the database
+                   await updateStock.save({ session });
+  
+            }else
+            {
+              const updateStockOld= await Stock.findOneAndUpdate(
+                { fuelType: purchaseData.purchaseData.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+                { 
+                  $inc: { 
+                    quantityInTons: -parseFloat(purchaseData.purchaseData.purchase.quantityInTons), 
+                   
+                  } 
+                },
+                { new: true, session }
+              );
+               
+               
+               if(!updateStockOld)
+                 {
+                   await session.abortTransaction();
+               session.endSession();
+           
+               return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                 }
+
+                 updateStockOld.quantityInTons = Math.round(updateStockOld.quantityInTons * 100) / 100;
+
+                 // Save the rounded values back to the database
+                 await updateStockOld.save({ session });
+      
+                 const updateStock= await Stock.findOneAndUpdate(
+                  { fuelType: purchaseData.fuelType },  // corrected from {name: req.body.fuelType}
+                  { 
+                    $inc: { 
+                      quantityInTons: parseFloat(purchaseData.purchaseData.purchase.quantityInTons), 
+                    
+                    } 
+                  },
+                  { new: true, session }
+                );
+                 
+                 
+                 if(!updateStock)
+                   {
+                     await session.abortTransaction();
+                 session.endSession();
+             
+                 return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+                   }
+
+                   updateStock.quantityInTons = Math.round(updateStock.quantityInTons * 100) / 100;
+
+                   // Save the rounded values back to the database
+                   await updateStock.save({ session });
+            }
+
+      }
 
 
     await session.commitTransaction();
@@ -1039,7 +1355,54 @@ router.post('/deletePurchase', auth, async (req, res) => {
 
   
 
+        const deleteStockLiters= await Stock.findOneAndUpdate(
+          { fuelType: req.body.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+          { 
+            $inc: { 
+              quantityInLiters: -parseFloat(req.body.purchase.quantityInLiters), 
+             
+            } 
+          },
+          { new: true, session }
+        );
+         
+         
+         if(!deleteStockLiters)
+           {
+             await session.abortTransaction();
+         session.endSession();
+     
+         return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+           }
+           deleteStockLiters.quantityInLiters = Math.round(deleteStockLiters.quantityInLiters * 100) / 100;
+       
+           // Save the rounded values back to the database
+           await deleteStockLiters.save({ session });
 
+           const deleteStockTons= await Stock.findOneAndUpdate(
+            { fuelType: req.body.purchase.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInTons: -parseFloat(req.body.purchase.quantityInTons), 
+               
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!deleteStockTons)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+             deleteStockTons.quantityInTons  = Math.round(deleteStockTons.quantityInTons  * 100) / 100;
+       
+             // Save the rounded values back to the database
+             await deleteStockTons.save({ session });
 
     // Commit the transaction
     await session.commitTransaction();
@@ -1341,11 +1704,12 @@ router.put('/updateExpense', auth, async (req, res) => {
           {
 
             const differance=oldPrice-newPrice;
-
+            const roundedDifference = Math.round(differance * 100) / 100;
+         
           
             const updateCash=  await CashAccount.findOneAndUpdate(
               {name: 'Main'},
-              { $inc: { balance: parseFloat(differance) } },
+              { $inc: { balance: parseFloat(roundedDifference) } },
               { new: true, session }
             );
             
@@ -1451,6 +1815,7 @@ router.post('/addSale', auth, async (req, res) => {
       plateNumber
     } = req.body;
 
+  
     // Set the customer and monthYear fields
     const customer = customerId;
     const monthYear = selectedCollection._id;
@@ -1555,6 +1920,21 @@ newTransactionData.sale=savedSale._id
  
 
             
+      const updatedStock =  await Stock.findOneAndUpdate(
+        { fuelType: fuelType},  // corrected from {name: req.body.fuelType}
+        { 
+          $inc: { 
+            quantityInLiters: -parseFloat(quantityInLiters), 
+            quantityInTons: -parseFloat(quantityInTons) 
+          } 
+        },
+        { new: true, session }
+      );
+// Round the values to avoid floating-point precision issues
+updatedStock.quantityInLiters = Math.round(updatedStock.quantityInLiters * 100) / 100;
+updatedStock.quantityInTons = Math.round(updatedStock.quantityInTons * 100) / 100;
+
+await updatedStock.save({ session });
 
     await session.commitTransaction();
     session.endSession();
@@ -1635,7 +2015,7 @@ router.get('/getAllSales', auth, async (req, res) => {
         data: [],
       });
     }
-    console.log(sales)
+ 
 
     return res.json({
       status: 'SUCCESS',
@@ -1654,6 +2034,7 @@ router.get('/getAllSales', auth, async (req, res) => {
 router.put('/updateSale', auth, async (req, res) => {
   const salesData = req.body;
 
+  
   
 
   const session = await mongoose.startSession();
@@ -1753,10 +2134,11 @@ router.put('/updateSale', auth, async (req, res) => {
          if(salesData.totalPaid!=salesData.saleData.paidAmount)
           {
              const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
-
+             const roundedDifference = Math.round(differance * 100) / 100;
+         
            const updateCash=  await CashAccount.findOneAndUpdate(
               {name: 'Main'},
-              { $inc: { balance: parseFloat(differance) } },
+              { $inc: { balance: parseFloat(roundedDifference) } },
               { new: true, session }
             );
             
@@ -1776,10 +2158,11 @@ router.put('/updateSale', auth, async (req, res) => {
           if(salesData.remaining !=salesData.saleData.remainingAmount )
             {
               const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
-
+              const roundedDifference = Math.round(remainingDifferance * 100) / 100;
+         
               const updateCustomer= await Customer.findByIdAndUpdate(
                 {_id:salesData.customerId},
-                { $inc: { balance: -parseFloat(remainingDifferance) } },
+                { $inc: { balance: -parseFloat(roundedDifference) } },
                 { new: true, session }
               );
           
@@ -1804,10 +2187,11 @@ router.put('/updateSale', auth, async (req, res) => {
            
             {
                const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
-  
+               const roundedDifference = Math.round(differance * 100) / 100;
+         
              const updateCash=  await CashAccount.findOneAndUpdate(
                 {name: 'Main'},
-                { $inc: { balance: parseFloat(differance) } },
+                { $inc: { balance: parseFloat(roundedDifference) } },
                 { new: true, session }
               );
               
@@ -1867,10 +2251,11 @@ router.put('/updateSale', auth, async (req, res) => {
                if(salesData.totalPaid!=salesData.saleData.paidAmount)
                 {
                    const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
-      
+                   const roundedDifference = Math.round(differance * 100) / 100;
+         
                  const updateSarafi=  await Sarafi.findOneAndUpdate(
                     {_id: salesData.sarafi},
-                    { $inc: { balance: parseFloat(differance) } },
+                    { $inc: { balance: parseFloat(roundedDifference) } },
                     { new: true, session }
                   );
                   
@@ -1890,10 +2275,11 @@ router.put('/updateSale', auth, async (req, res) => {
                 if(salesData.remaining !=salesData.saleData.remainingAmount )
                   {
                     const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
-      
+                    const roundedDifference = Math.round(remainingDifferance * 100) / 100;
+         
                     const updateCustomer= await Customer.findByIdAndUpdate(
                       {_id:salesData.customerId},
-                      { $inc: { balance: -parseFloat(remainingDifferance) } },
+                      { $inc: { balance: -parseFloat(roundedDifference) } },
                       { new: true, session }
                     );
                 
@@ -1919,10 +2305,11 @@ router.put('/updateSale', auth, async (req, res) => {
                  if(salesData.totalPaid!=salesData.saleData.paidAmount)
                   {
                      const differance=parseFloat(salesData.totalPaid)-parseFloat(salesData.saleData.paidAmount)
-        
+                     const roundedDifference = Math.round(differance * 100) / 100;
+         
                    const updateSarafi=  await Sarafi.findOneAndUpdate(
                       {_id: salesData.sarafi},
-                      { $inc: { balance: parseFloat(differance) } },
+                      { $inc: { balance: parseFloat(roundedDifference) } },
                       { new: true, session }
                     );
                     
@@ -2010,10 +2397,11 @@ router.put('/updateSale', auth, async (req, res) => {
                         if(salesData.remaining !=salesData.saleData.remainingAmount )
                           {
                             const remainingDifferance=parseFloat(salesData.remaining)-parseFloat(salesData.saleData.remainingAmount)
-              
+                            const roundedDifference = Math.round(remainingDifferance * 100) / 100;
+         
                             const updateCustomer= await Customer.findByIdAndUpdate(
                               {_id:salesData.customerId},
-                              { $inc: { balance: -parseFloat(remainingDifferance) } },
+                              { $inc: { balance: -parseFloat(roundedDifference) } },
                               { new: true, session }
                             );
                         
@@ -2096,6 +2484,315 @@ router.put('/updateSale', auth, async (req, res) => {
          
 
                   
+// update Stock
+
+if(salesData.fuelType===salesData.saleData.sale.fuelType)
+  {
+   
+    if(salesData.quantityInLiters!='' && salesData.quantityInLiters!=null &&  salesData.quantityInLiters!=undefined)
+    {
+      const oldQuantity=parseFloat(salesData.saleData.sale.quantityInLiters)
+      const newQuantity=parseFloat(salesData.quantityInLiters)
+     
+      if(oldQuantity!==newQuantity)
+       {
+
+         const differance=oldQuantity-newQuantity;
+
+         const roundedDifference = Math.round(differance * 100) / 100;
+         
+        
+        const updateStock= await Stock.findOneAndUpdate(
+          { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+          { 
+            $inc: { 
+              quantityInLiters: parseFloat(roundedDifference), 
+             
+            } 
+          },
+          { new: true, session }
+        );
+         
+         
+         if(!updateStock)
+           {
+             await session.abortTransaction();
+         session.endSession();
+     
+         return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+           }
+
+           updateStock.quantityInLiters = Math.round(updateStock.quantityInLiters * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStock.save({ session });
+       }
+
+
+
+    }
+
+    if(salesData.quantityInTons!='' && salesData.quantityInTons!=null &&  salesData.quantityInTons!=undefined)
+      {
+        const oldQuantity=parseFloat(salesData.saleData.sale.quantityInTons)
+        const newQuantity=parseFloat(salesData.quantityInTons)
+       
+        if(oldQuantity!==newQuantity)
+         {
+
+           const differance=oldQuantity-newQuantity;
+           const roundedDifference = Math.round(differance * 100) / 100;
+         
+           
+          const updateStock= await Stock.findOneAndUpdate(
+            { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInTons: parseFloat(roundedDifference), 
+               
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!updateStock)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+             updateStock.quantityInTons = Math.round(updateStock.quantityInTons * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStock.save({ session });
+
+             
+         }
+      }
+  }else
+  {
+
+    if(salesData.quantityInLiters!='' && salesData.quantityInLiters!=null &&  salesData.quantityInLiters!=undefined)
+      {
+
+        const updateStockOld= await Stock.findOneAndUpdate(
+          { fuelType: salesData.saleData.sale.fuelType },  // corrected from {name: req.body.fuelType}
+          { 
+            $inc: { 
+              quantityInLiters: parseFloat(salesData.saleData.sale.quantityInLiters), 
+             
+            } 
+          },
+          { new: true, session }
+        );
+         
+         
+         if(!updateStockOld)
+           {
+             await session.abortTransaction();
+         session.endSession();
+     
+         return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+           }
+
+           updateStockOld.quantityInLiters = Math.round(updateStockOld.quantityInLiters * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStockOld.save({ session });
+
+
+           const updateStock= await Stock.findOneAndUpdate(
+            { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInLiters: -parseFloat(salesData.quantityInLiters), 
+              
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!updateStock)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+             updateStock.quantityInLiters = Math.round(updateStock.quantityInLiters * 100) / 100;
+
+             // Save the rounded values back to the database
+             await updateStock.save({ session });
+
+      }else
+      {
+        const updateStockOld= await Stock.findOneAndUpdate(
+          { fuelType: salesData.saleData.sale.fuelType },  // corrected from {name: req.body.fuelType}
+          { 
+            $inc: { 
+              quantityInLiters: parseFloat(salesData.saleData.sale.quantityInLiters), 
+             
+            } 
+          },
+          { new: true, session }
+        );
+         
+         
+         if(!updateStockOld)
+           {
+             await session.abortTransaction();
+         session.endSession();
+     
+         return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+           }
+
+           updateStockOld.quantityInLiters = Math.round(updateStockOld.quantityInLiters * 100) / 100;
+
+           // Save the rounded values back to the database
+           await updateStockOld.save({ session });
+           
+           const updateStock= await Stock.findOneAndUpdate(
+            { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInLiters: -parseFloat(salesData.saleData.sale.quantityInLiters), 
+              
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!updateStock)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+             updateStock.quantityInLiters = Math.round(updateStock.quantityInLiters * 100) / 100;
+
+             // Save the rounded values back to the database
+             await updateStock.save({ session });
+      }
+
+      if(salesData.quantityInTons!='' && salesData.quantityInTons!=null &&  salesData.quantityInTons!=undefined)
+        {
+
+          const updateStockOld= await Stock.findOneAndUpdate(
+            { fuelType: salesData.saleData.sale.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInTons: parseFloat(salesData.saleData.sale.quantityInTons), 
+               
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!updateStockOld)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+             updateStockOld.quantityInTons = Math.round(updateStockOld.quantityInTons * 100) / 100;
+
+// Save the rounded values back to the database
+await updateStockOld.save({ session });
+  
+             const updateStock= await Stock.findOneAndUpdate(
+              { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+              { 
+                $inc: { 
+                  quantityInTons: -parseFloat(salesData.quantityInTons), 
+                
+                } 
+              },
+              { new: true, session }
+            );
+             
+             
+             if(!updateStock)
+               {
+                 await session.abortTransaction();
+             session.endSession();
+         
+             return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+               }
+
+               updateStock.quantityInTons = Math.round(updateStock.quantityInTons * 100) / 100;
+
+               // Save the rounded values back to the database
+               await updateStock.save({ session });
+
+        }else
+        {
+          const updateStockOld= await Stock.findOneAndUpdate(
+            { fuelType: salesData.saleData.sale.fuelType },  // corrected from {name: req.body.fuelType}
+            { 
+              $inc: { 
+                quantityInTons: parseFloat(salesData.saleData.sale.quantityInTons), 
+               
+              } 
+            },
+            { new: true, session }
+          );
+           
+           
+           if(!updateStockOld)
+             {
+               await session.abortTransaction();
+           session.endSession();
+       
+           return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+             }
+
+
+             updateStockOld.quantityInTons = Math.round(updateStockOld.quantityInTons * 100) / 100;
+
+             // Save the rounded values back to the database
+             await updateStockOld.save({ session });
+  
+             const updateStock= await Stock.findOneAndUpdate(
+              { fuelType: salesData.fuelType },  // corrected from {name: req.body.fuelType}
+              { 
+                $inc: { 
+                  quantityInTons: -parseFloat(salesData.saleData.sale.quantityInTons), 
+                
+                } 
+              },
+              { new: true, session }
+            );
+             
+             
+             if(!updateStock)
+               {
+                 await session.abortTransaction();
+             session.endSession();
+         
+             return res.json({ status: 'FIELD', message: 'ریکارد تغیر نه شو' });
+               }
+
+               updateStock.quantityInTons = Math.round(updateStock.quantityInTons * 100) / 100;
+
+               // Save the rounded values back to the database
+               await updateStock.save({ session });
+        }
+
+  }
+
+
+
 
               // Commit the transaction
     await session.commitTransaction();
@@ -2185,6 +2882,23 @@ router.post('/deleteSale', auth, async (req, res) => {
     saleData._id
     ).session(session);
 
+
+   const updatedStock= await Stock.findOneAndUpdate(
+      { fuelType: saleData.sale.fuelType},  // corrected from {name: req.body.fuelType}
+      { 
+        $inc: { 
+          quantityInLiters: parseFloat(saleData.sale.quantityInLiters), 
+          quantityInTons: parseFloat(saleData.sale.quantityInTons) 
+        } 
+      },
+      { new: true, session }
+    );
+
+    updatedStock.quantityInLiters = Math.round(updatedStock.quantityInLiters * 100) / 100;
+updatedStock.quantityInTons = Math.round(updatedStock.quantityInTons * 100) / 100;
+
+// Save the rounded values back to the database
+await updatedStock.save({ session });
 
 
     // Commit the transaction
@@ -2336,6 +3050,82 @@ router.get('/getCutomerById/:customerId', async (req, res) => {
   }
 });
 
+router.get('/getCustomerLoanReceivable', async (req, res) => {
+  try {
+    // Aggregate to sum balances where balance > 0
+    const result = await Customer.aggregate([
+      {
+        $match: { balance: { $lt: 0 } } // Filter documents with balance greater than 0
+      },
+      {
+        $group: {
+          _id: null, // Group all documents together
+          totalBalance: { $sum: "$balance" } // Sum the balance field
+        }
+      }
+    ]);
+
+    // If no result, the total balance will be undefined, set it to 0
+    const totalBalance = result.length > 0 ? result[0].totalBalance : 0;
+
+  
+    res.json({ status: 'SUCCESS', data:  totalBalance  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getCustomerLoanPayable', async (req, res) => {
+  try {
+    // Aggregate to sum balances where balance > 0
+    const result = await Customer.aggregate([
+      {
+        $match: { balance: { $gt: 0 } } // Filter documents with balance greater than 0
+      },
+      {
+        $group: {
+          _id: null, // Group all documents together
+          totalBalance: { $sum: "$balance" } // Sum the balance field
+        }
+      }
+    ]);
+
+    // If no result, the total balance will be undefined, set it to 0
+    const totalBalance = result.length > 0 ? result[0].totalBalance : 0;
+
+    
+    res.json({ status: 'SUCCESS', data:  totalBalance  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getAllCustomerLoanReceivable', async (req, res) => {
+  try {
+   
+    const customers = await Customer.find({ balance: { $lt: 0 } });
+
+    res.json({ status: 'SUCCESS', data:  customers  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getAllCustomerLoanPayable', async (req, res) => {
+  try {
+   
+    const customers = await Customer.find({ balance: { $gt: 0 } });
+
+    res.json({ status: 'SUCCESS', data:  customers  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 router.get('/getSarafiById/:sarafiId', async (req, res) => {
   try {
     
@@ -2357,6 +3147,109 @@ router.get('/getSarafiById/:sarafiId', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+router.get('/getSarafiLoanReceivable', async (req, res) => {
+  try {
+    // Aggregate to sum balances where balance > 0
+    const result = await Sarafi.aggregate([
+      {
+        $match: { balance: { $gt: 0 } } // Filter documents with balance greater than 0
+      },
+      {
+        $group: {
+          _id: null, // Group all documents together
+          totalBalance: { $sum: "$balance" } // Sum the balance field
+        }
+      }
+    ]);
+
+    // If no result, the total balance will be undefined, set it to 0
+    const totalBalance = result.length > 0 ? result[0].totalBalance : 0;
+
+  
+    res.json({ status: 'SUCCESS', data:  totalBalance  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getAllSarafiLoanReceivable', async (req, res) => {
+  try {
+   
+    const sarafis = await Sarafi.find({ balance: { $gt: 0 } });
+
+    res.json({ status: 'SUCCESS', data:  sarafis  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getAllSarafiLoanPayable', async (req, res) => {
+  try {
+   
+    const sarafis = await Sarafi.find({ balance: { $lt: 0 } });
+
+    res.json({ status: 'SUCCESS', data:  sarafis  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/getSarafiLoanPayable', async (req, res) => {
+  try {
+    // Aggregate to sum balances where balance > 0
+    const result = await Sarafi.aggregate([
+      {
+        $match: { balance: { $lt: 0 } } // Filter documents with balance greater than 0
+      },
+      {
+        $group: {
+          _id: null, // Group all documents together
+          totalBalance: { $sum: "$balance" } // Sum the balance field
+        }
+      }
+    ]);
+
+    // If no result, the total balance will be undefined, set it to 0
+    const totalBalance = result.length > 0 ? result[0].totalBalance : 0;
+
+    
+    res.json({ status: 'SUCCESS', data:  totalBalance  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+router.get('/getTotalSaleInEachMonth/:monthYear', auth, async (req, res) => {
+  try {
+    const { monthYear } = req.params;
+
+    console.log(monthYear)
+    // Perform aggregation to get total quantities for each fuel type
+    const salesData = await Sale.aggregate([
+      { $match: { monthYear: new mongoose.Types.ObjectId(monthYear) } },
+      {
+        $group: {
+          _id: "$fuelType",
+          totalQuantityInLiters: { $sum: "$quantityInLiters" },
+          totalQuantityInTons: { $sum: "$quantityInTons" },
+        },
+      },
+    ]);
+
+    console.log(salesData)
+    res.json({ status: 'SUCCESS', data: salesData });
+  } catch (error) {
+    console.error('Error fetching sale stock:', error);
+    res.json({ status: 'FAILED', message: 'Internal Server Error' });
   }
 });
 
@@ -2743,10 +3636,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
       if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
         {
            const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-
+           const roundedDifference = Math.round(differance * 100) / 100;
+         
          const updateCash=  await CashAccount.findOneAndUpdate(
             {name: 'Main'},
-            { $inc: { balance: parseFloat(differance) } },
+            { $inc: { balance: parseFloat(roundedDifference) } },
             { new: true, session }
           );
           
@@ -2763,7 +3657,7 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
             
             const updateCustomer= await Customer.findByIdAndUpdate(
               {_id:accountData.selectedRowData.customer},
-              { $inc: { balance: parseFloat(differance) } },
+              { $inc: { balance: parseFloat(roundedDifference) } },
               { new: true, session }
             );
         
@@ -2810,10 +3704,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
       if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
         {
            const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-
+           const roundedDifference = Math.round(differance * 100) / 100;
+         
          const updateCash=  await CashAccount.findOneAndUpdate(
             {name: 'Main'},
-            { $inc: { balance: -parseFloat(differance) } },
+            { $inc: { balance: -parseFloat(roundedDifference) } },
             { new: true, session }
           );
           
@@ -2830,7 +3725,7 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
             
             const updateCustomer= await Customer.findByIdAndUpdate(
               {_id:accountData.selectedRowData.customer},
-              { $inc: { balance: -parseFloat(differance) } },
+              { $inc: { balance: -parseFloat(roundedDifference) } },
               { new: true, session }
             );
         
@@ -3043,10 +3938,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
             if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
               {
                  const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-      
+                 const roundedDifference = Math.round(differance * 100) / 100;
+         
                const updateSarafi=  await Sarafi.findOneAndUpdate(
                   {_id: accountData.sarafi._id},
-                  { $inc: { balance: parseFloat(differance) } },
+                  { $inc: { balance: parseFloat(roundedDifference) } },
                   { new: true, session }
                 );
                 
@@ -3063,7 +3959,7 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
                   
                   const updateCustomer= await Customer.findByIdAndUpdate(
                     {_id:accountData.selectedRowData.customer},
-                    { $inc: { balance: parseFloat(differance) } },
+                    { $inc: { balance: parseFloat(roundedDifference) } },
                     { new: true, session }
                   );
               
@@ -3153,10 +4049,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
 
                             
                              const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-                             console.log('diff',differance)
+                             const roundedDifference = Math.round(differance * 100) / 100;
+         
                         const updateCustomer= await Customer.findByIdAndUpdate(
                           {_id:accountData.selectedRowData.customer},
-                          { $inc: { balance: parseFloat(differance) } },
+                          { $inc: { balance: parseFloat(roundedDifference) } },
                           { new: true, session }
                         );
                     
@@ -3221,10 +4118,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
               if(parseFloat(accountData.paidAmount)!=parseFloat(accountData.selectedRowData.paidAmount))
                 {
                    const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-        
+                   const roundedDifference = Math.round(differance * 100) / 100;
+         
                  const updateSarafi=  await Sarafi.findOneAndUpdate(
                     {_id: accountData.sarafi._id},
-                    { $inc: { balance: -parseFloat(differance) } },
+                    { $inc: { balance: -parseFloat(roundedDifference) } },
                     { new: true, session }
                   );
                   
@@ -3241,7 +4139,7 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
                     
                     const updateCustomer= await Customer.findByIdAndUpdate(
                       {_id:accountData.selectedRowData.customer},
-                      { $inc: { balance: -parseFloat(differance) } },
+                      { $inc: { balance: -parseFloat(roundedDifference) } },
                       { new: true, session }
                     );
                 
@@ -3331,10 +4229,11 @@ router.put('/updateCustomerAccountRecord', auth, async (req, res) => {
   
                               
                                const differance=parseFloat(accountData.paidAmount)-parseFloat(accountData.selectedRowData.paidAmount)
-                               
+                               const roundedDifference = Math.round(differance * 100) / 100;
+         
                           const updateCustomer= await Customer.findByIdAndUpdate(
                             {_id:accountData.selectedRowData.customer},
-                            { $inc: { balance: -parseFloat(differance) } },
+                            { $inc: { balance: -parseFloat(roundedDifference) } },
                             { new: true, session }
                           );
                       
@@ -3802,4 +4701,79 @@ router.get('/getAvailableCollections', auth, async (req, res) => {
     });
   }
 });
+
+
+
+router.get('/getStock', auth, async (req, res) => {
+  try {
+    
+
+    
+    // Check if SaleCollection for the given month exists
+    const stock = await Stock.find()
+    
+
+    if (!stock || stock.length === 0) {
+      return res.json({
+        status: 'FAILED',
+        message: 'stock not found',
+        data: [],
+      });
+    }
+    console.log(stock)
+
+    return res.json({
+      status: 'SUCCESS',
+      data: stock,
+    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({
+      status: 'FAILED',
+      message: 'Server Error',
+    });
+  }
+});
+
+
+
+router.get('/sales-data', async (req, res) => {
+  try {
+    const salesData = await Sale.aggregate([
+      {
+        $group: {
+          _id: '$monthYear',
+          totalSales: { $sum: '$quantityInLiters' } // Or '$quantityInTons' based on your requirement
+        }
+      },
+      {
+        $lookup: {
+          from: 'collectionsdatemanagements', // The collection name of your 'CollectionsDateManagement' model
+          localField: '_id',
+          foreignField: '_id',
+          as: 'monthYearDetails'
+        }
+      },
+      {
+        $unwind: '$monthYearDetails'
+      },
+      {
+        $project: {
+          _id: 0,
+          monthYear: '$monthYearDetails.collectionName', // Assuming 'collectionName' is the field representing the month and year
+          totalSales: 1
+        }
+      }
+    ]);
+    return res.json({
+      status: 'SUCCESS',
+      data: salesData
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
