@@ -1,5 +1,5 @@
 {
-    "mongoURI": "mongodb+srv://mahboobullahmuntazer2005:c1ByHzhvvrLsYSpZ@cluster0.qvaiggy.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+    "mongoURI": "mongodb+srv://mahboobullahmuntazer2005:Softvisions@cluster0.qvaiggy.mongodb.net/Mashraqiwal?retryWrites=true&w=majority&appName=Cluster0",
 
     
    "jwtSecret":"mysecrettoken"
